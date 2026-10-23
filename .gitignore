@@ -1,0 +1,23 @@
+# Avhengigheter og byggeartefakter
+node_modules/
+.next/
+out/
+
+# Hemmeligheter og lokale miljøvariabler – skal ALDRI i git
+.env
+.env.local
+.env.*.local
+
+# Lokal testdatabase (JSON-fil) – kun for lokal utvikling, ikke produksjon
+data/
+
+# Lokale HTTPS-sertifikater (npm run dev --experimental-https)
+certificates/
+
+# Verktøy-mapper fra Netlify/Vercel CLI
+.netlify/
+.vercel/
+
+# OS/editor-støy
+.DS_Store
+*.log

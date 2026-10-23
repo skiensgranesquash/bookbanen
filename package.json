@@ -1,0 +1,31 @@
+{
+  "name": "squash-booking",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Bookingmodul for squashbanen til IF Skiens Grane, med adminpanel og betaling via Vipps ePayment API (eller en lokal simulert betaling for testing).",
+  "scripts": {
+    "dev": "next dev --experimental-https",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "create-admin": "tsx --conditions=react-server scripts/create-admin.ts",
+    "reset-admin-password": "tsx --conditions=react-server scripts/reset-admin-password.ts",
+    "register-webhook": "tsx --conditions=react-server scripts/register-webhook.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "date-fns": "^3.6.0",
+    "date-fns-tz": "^3.2.0",
+    "next": "^16.3.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4"
+  }
+}

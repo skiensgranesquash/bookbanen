@@ -1,0 +1,1141 @@
+.page {
+  --brand: #0046b3;
+  --brand-dark: #003380;
+  --brand-yellow: #f8dc3c;
+  --ink: #111827;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --surface: #ffffff;
+  --available: #f3f4f6;
+  --conflict-bg: #fef2f2;
+  --conflict-border: #fecaca;
+  --danger-dark: #7f1d1d;
+  --ok-bg: #f0fdf4;
+  --ok-border: #bbf7d0;
+  --ok-hover: #dcfce7;
+  --ok-dark: #15803d;
+  --shadow-card: 0 1px 2px rgba(17, 24, 39, 0.04), 0 4px 12px rgba(17, 24, 39, 0.06);
+
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  color: var(--ink);
+}
+
+.loginCard {
+  max-width: 360px;
+  margin: 80px auto 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  border-top: 3px solid var(--brand-yellow);
+}
+
+/* ---- Fast toppmeny (faner), delt av alle innloggede admin-sider ----
+   Se app/admin/AdminNav.tsx. Faner à la ark i et regneark: den aktive fanen
+   løftes fram i hvitt (samme farge som .tabPanel under) med en gul
+   toppkant, mens resten av menyen ligger i en grå stripe bak. .tabPanel
+   trekkes opp med en negativ margin nøyaktig lik .page sin toppdiger, slik
+   at den aktive fanen og rammen rundt sideinnholdet henger sammen uten
+   synlig fuge – tydelig hvilket menypunkt som er åpent. */
+.navBar {
+  /* AdminNav.tsx rendres som søsken FØR <main className={styles.page}>, ikke
+     som et barn av den – så den arver ikke CSS-variablene som er definert på
+     .page (se øverst i denne filen). Uten denne kopien her ville --available,
+     --border, --muted, --brand, --surface og --brand-yellow alle vært
+     udefinerte inne i navbaren, og falt tilbake til gjennomsiktig/arvet farge
+     i stedet for de faktiske fargene – nøyaktig det som gjorde at fanene så
+     fargeløse/like ut i stedet for tydelig grå (inaktive) vs. hvit (aktiv). */
+  --brand: #0046b3;
+  --brand-yellow: #f8dc3c;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --surface: #ffffff;
+  --available: #f3f4f6;
+
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  width: 100%;
+  background: var(--available);
+  border-bottom: 1px solid var(--border);
+}
+
+.navBarInner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.navTabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.navTab {
+  display: inline-block;
+  padding: 10px 16px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  position: relative;
+  top: 1px;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.navTab:hover {
+  background: #e9eef7;
+  color: var(--brand);
+}
+
+.navTabActive {
+  background: var(--surface);
+  color: var(--brand);
+  border-color: var(--border);
+  border-top: 3px solid var(--brand-yellow);
+  padding-top: 8px;
+  box-shadow: 0 -2px 6px rgba(17, 24, 39, 0.04);
+}
+
+.navTabActive:hover {
+  background: var(--surface);
+  color: var(--brand);
+}
+
+.navActions {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+.tabPanel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 16px 16px;
+  padding: 20px 20px 1px;
+  margin: -24px 0 0;
+  box-shadow: var(--shadow-card);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.subtitle {
+  margin: 4px 0 16px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.formRow label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+.formRow input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.checkboxOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* .formRow input{width:100%} above is meant for text/date/time fields –
+   override it back to normal size for a checkbox nested inside. */
+.checkboxOption input[type="checkbox"] {
+  width: auto;
+}
+
+.inlineFields {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inlineFields > div {
+  flex: 1;
+  min-width: 140px;
+}
+
+.submitButton {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--brand);
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background-color 0.1s ease;
+}
+
+.submitButton:hover:not(:disabled) {
+  background: var(--brand-dark);
+}
+
+.submitButton:disabled {
+  background: var(--available);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  padding: 8px 14px;
+  border: 1.5px solid var(--brand);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--brand);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.secondaryButton:hover {
+  background: #eef4ff;
+}
+
+.dangerButton {
+  padding: 6px 10px;
+  border: 1px solid var(--conflict-border);
+  border-radius: 8px;
+  background: var(--conflict-bg);
+  color: var(--danger-dark);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.error {
+  color: var(--danger-dark);
+  background: var(--conflict-bg);
+  border: 1px solid var(--conflict-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.filterRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.bookingList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bookingRow {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bookingMeta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.badgePending {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.badgeConfirmed {
+  background: var(--ok-bg);
+  color: #166534;
+}
+
+.badgeCancelled,
+.badgeExpired {
+  background: var(--conflict-bg);
+  color: var(--danger-dark);
+}
+
+.badgeBlock {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.slotDates {
+  font-size: 0.85rem;
+  margin-top: 6px;
+  max-height: 90px;
+  overflow-y: auto;
+}
+
+.success {
+  color: #166534;
+  background: var(--ok-bg);
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.userList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.userRow {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---- Åpningstider: ukentlig standard ---- */
+
+.weekRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.weekRow:last-child {
+  border-bottom: none;
+}
+
+.weekRowLabel {
+  width: 90px;
+  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding-top: 7px;
+}
+
+.weekRowClosedToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+  width: 90px;
+  flex-shrink: 0;
+  padding-top: 7px;
+}
+
+.weekRowTimes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 220px;
+}
+
+.weekRowTimes input[type="time"] {
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.weekRowClosedLabel {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-style: italic;
+  padding-top: 7px;
+}
+
+/* En dag kan ha FLERE tidsrom (f.eks. lunsjstengt mellom to) – denne
+   kolonnen stabler ett .intervalRow per tidsrom, pluss en "legg til"-lenke
+   nederst. Brukes både for ukedag-rader og for unntaksskjemaet (ferier). */
+.weekRowIntervals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 220px;
+}
+
+.intervalRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.intervalRow input[type="time"] {
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.intervalRemoveButton {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--danger-dark);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  width: 26px;
+  height: 26px;
+}
+
+.intervalRemoveButton:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.addIntervalButton {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--brand);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 2px 0;
+  text-decoration: underline;
+}
+
+/* ---- Åpningstider: ferie/annerledesdag-kalender ---- */
+
+.hoursLayout {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.calWrap {
+  flex: 1;
+  min-width: 280px;
+  max-width: 340px;
+}
+
+.calHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.calTitle {
+  font-weight: 700;
+  color: var(--brand);
+  text-transform: capitalize;
+}
+
+.calNav {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--brand);
+}
+
+.calNav:hover {
+  background: #eef4ff;
+}
+
+.calWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.calGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calDay {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.calDay:hover {
+  background: var(--available);
+}
+
+.calDayOutside {
+  color: var(--muted);
+  opacity: 0.4;
+}
+
+.calDaySelected {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: white;
+  font-weight: 700;
+}
+
+.calDaySelected:hover {
+  background: var(--brand-dark);
+}
+
+.calDayToday {
+  border-color: var(--brand-yellow);
+  font-weight: 700;
+}
+
+.calDayException::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--danger-dark);
+}
+
+.calDayExceptionCustom::after {
+  background: #b45309;
+}
+
+.calDaySelected.calDayException::after,
+.calDaySelected.calDayExceptionCustom::after {
+  background: var(--brand-yellow);
+}
+
+.calLegend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 10px;
+}
+
+.calLegendDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  margin-right: 4px;
+}
+
+.excPanel {
+  flex: 1;
+  min-width: 260px;
+}
+
+.excSelectedCount {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.excList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin-top: 14px;
+}
+
+.excListRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+}
+
+.excListMeta {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.excListActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  color: var(--brand);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+}
+
+.linkButtonDanger {
+  background: none;
+  border: none;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+  color: var(--danger-dark);
+}
+
+/* ---- Oversikt: statistikk-fliser ---- */
+
+.statsRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.statTile {
+  flex: 1;
+  min-width: 140px;
+  background: var(--available);
+  border-radius: 12px;
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.statTileValue {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--brand);
+  line-height: 1.1;
+}
+
+.statTileLabel {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ---- Oversikt: bookingkalender (med markører per dag) ---- */
+
+.bcWrap {
+  flex: 2;
+  min-width: 360px;
+}
+
+.bcGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.bcDay {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 4px 5px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.bcDay:hover {
+  background: var(--available);
+}
+
+.bcDayOutside {
+  opacity: 0.4;
+}
+
+.bcDayToday {
+  border-color: var(--brand-yellow);
+  border-width: 1.5px;
+}
+
+.bcDaySelected {
+  background: #eef4ff;
+  border-color: var(--brand);
+  border-width: 1.5px;
+}
+
+.bcDayTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.bcDayNumber {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.bcDayAddBtn {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--brand);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bcDayAddBtn:hover {
+  background: #eef4ff;
+  border-color: var(--brand);
+}
+
+.bcDayEntries {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 2px;
+  overflow: hidden;
+}
+
+.bcEntry {
+  display: block;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+}
+
+/* Samme fargepalett som rutenettet (grønn/rød/gul) på tvers av kalender,
+   dag-ruter og avtaleoversikt – ikke en egen fargekode bare for admin. */
+.bcEntryConfirmed {
+  background: var(--ok-bg);
+  color: var(--ok-dark);
+  border-color: var(--ok-border);
+}
+
+.bcEntryPending {
+  background: #fef9c3;
+  color: #854d0e;
+  border-color: #fde68a;
+}
+
+.bcEntryBlock {
+  background: #b45309;
+  color: white;
+}
+
+.bcEntryFailed {
+  background: var(--conflict-bg);
+  color: var(--danger-dark);
+  border-color: var(--conflict-border);
+  text-decoration: line-through;
+}
+
+.bcDayMore {
+  font-size: 0.6rem;
+  color: var(--muted);
+  padding: 1px 4px;
+}
+
+/* ---- Oversikt: kalender + dagens avtaler, side om side ---- */
+
+.calendarAgendaRow {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.agendaPanel {
+  flex: 1;
+  min-width: 260px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.agendaList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* Samme grønn/rød/gul-palett som rutenettet og dag-rutene i kalenderen –
+   bekreftet er grunntilstanden (grønn), de andre statusene overstyrer. */
+.agendaRow {
+  font-size: 0.9rem;
+  padding: 8px 10px;
+  border: 1px solid var(--ok-border);
+  border-radius: 8px;
+  background: var(--ok-bg);
+  color: var(--ok-dark);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.agendaRowText {
+  flex: 1;
+  min-width: 160px;
+}
+
+.agendaRowActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.agendaRow.bcEventLinePending {
+  background: #fef9c3;
+  border-color: #fde68a;
+  color: #854d0e;
+  font-style: italic;
+}
+
+.agendaRow.bcEventLineFailed {
+  color: var(--danger-dark);
+  background: var(--conflict-bg);
+  border-color: var(--conflict-border);
+}
+
+/* Kun selve navnet/klokkeslettet skal ha gjennomstreking på en avlyst/utløpt
+   rad – ikke "– avlyst/utløpt"-teksten eller "Aktiver igjen"/"Avlys"-knappene
+   ved siden av. Satt på en egen span rundt occ.label (se BookingsInsights.tsx)
+   i stedet for på hele .agendaRow, siden en gjennomstreking satt på en
+   forelder ellers tegnes gjennom ALL tekst i etterkommere – også lenke-
+   knappenes tekst – uansett hva de selv setter sin egen text-decoration til. */
+.agendaRowLabelFailed {
+  text-decoration: line-through;
+}
+
+.agendaRow.bcEventLineBlock {
+  background: var(--surface);
+  border-color: var(--border);
+  color: #b45309;
+}
+
+/* ---- Oversikt: rask blokkering av den valgte dagen (over avtalelisten) ---- */
+
+.quickBlockBox {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+}
+
+.quickBlockBox .form {
+  gap: 10px;
+}
+
+/* ---- Oversikt: blokkering over flere dager (smal stripe under kalenderen) ---- */
+
+.blockStrip {
+  margin-top: 12px;
+  background: var(--available);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.blockStripTitle {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.blockStrip .inlineFields > div {
+  min-width: 120px;
+}
+
+.blockStrip .submitButton {
+  align-self: flex-start;
+}
+
+/* ---- Oversikt: mest aktive bookere ---- */
+
+.leaderboardList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.leaderboardRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.leaderboardRank {
+  font-weight: 700;
+  color: var(--muted);
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.leaderboardInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.leaderboardName {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.leaderboardMeta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.leaderboardCount {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--brand);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ---- Tre bokser side om side: mest aktive bookere / blokker en tid / bookingliste ---- */
+
+.threeColRow {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.threeColRow > .card {
+  /* flex-basis 280px (ikke 0%) styrer både radbrytingen OG vekstfordelingen
+     – flex-basis:0% ville brukt innholdets naturlige (brede) minste bredde
+     til radbrytingen, siden min-width:0 under kun fjerner selve bunngulvet,
+     ikke hva nettleseren regner som "trenger plass" ved radbryting. */
+  flex: 1 1 280px;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+/* ---- Oversikt: "book uten betaling"-modal (åpnes med "+" i en dag-rute) ---- */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+
+.modalCard {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 20px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: var(--shadow-card);
+}
+
+/* ---- "Book uten betaling"/"Rediger"-modal: samme grønn/rød slot-rutenett som den offentlige bookingsiden ---- */
+
+.manualSlotGrid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+  margin: 12px 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.manualSlotButton {
+  padding: 8px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok-dark);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+
+.manualSlotButton:hover:not(:disabled) {
+  background: var(--ok-hover);
+  border-color: var(--brand);
+}
+
+.manualSlotButton:disabled {
+  background: var(--conflict-bg);
+  border-color: var(--conflict-border);
+  color: var(--danger-dark);
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+/* "adjacent" – ledig i seg selv, men en hel time får ikke plass herfra uten å
+   krysse en nabobooking (reason fra /api/squash/availability). Nedtones grått
+   i stedet for rødt/gjennomstreket, samme språk som på den offentlige siden. */
+.manualSlotButtonAdjacent:disabled {
+  background: var(--available);
+  border-color: var(--border);
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0.7;
+}
+
+.manualSlotButtonSelected {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: white;
+  text-decoration: none;
+}
+
+.manualSlotButtonSelected:hover:not(:disabled) {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+
+/* Forhåndsvisning ved museover (kun pekerenheter med ekte hover) – BEGGE
+   halvtimene i timen du peker på får denne samme lysere blå tonen og flyter
+   visuelt sammen via .manualMergeLeft/.manualMergeRight + manualSlotBridge
+   under (samme mønster som BookingCalendar.tsx/booking.module.css). */
+.manualSlotButtonHoverPreview {
+  background: #eef4ff;
+  border-color: var(--brand);
+  color: var(--brand-dark);
+}
+
+/* Sammenhengende celler i samme tilstand (valgt, hover-forhåndsvisning,
+   eller fysisk opptatt av en ekte booking) flyter sammen til én blokk. */
+.manualSlotButton.manualMergeRight {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.manualSlotButton.manualMergeLeft {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: none;
+}
+
+.manualSlotBridge {
+  position: absolute;
+  pointer-events: none;
+}
+
+.manualSlotBridgeSelected {
+  background: var(--brand);
+}
+
+.manualSlotBridgeHoverPreview {
+  background: #eef4ff;
+}
+
+.manualSlotBridgeBooked {
+  background: var(--conflict-bg);
+}
+
+.manualSlotBridgeBlocked {
+  background: var(--available);
+}

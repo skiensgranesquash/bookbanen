@@ -1,0 +1,463 @@
+/*
+ * Fargepalett og fonter hentet direkte fra skiensgrane.no (marineblå +
+ * gul/gull, "DM Sans"), slik at testversjonen ser ut som klubbens ekte
+ * nettside mens Helge tester den. Når siden flyttes inn i hovedprosjektet
+ * kan disse variablene erstattes med klubbens delte designtokens 1:1 –
+ * navnene under er de samme uansett.
+ */
+.page {
+  --brand: #0046b3;
+  --brand-dark: #003380;
+  --brand-yellow: #f8dc3c;
+  --ink: #111827;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --surface: #ffffff;
+  --available: #f3f4f6;
+  --available-hover: #e5e7eb;
+  --taken: #f1f1f1;
+  --ok-bg: #f0fdf4;
+  --ok-border: #bbf7d0;
+  --ok-hover: #dcfce7;
+  --ok-dark: #15803d;
+  --conflict-bg: #fef2f2;
+  --conflict-border: #fecaca;
+  --danger: #b91c1c;
+  --danger-dark: #7f1d1d;
+  --shadow-card: 0 1px 2px rgba(17, 24, 39, 0.04), 0 4px 12px rgba(17, 24, 39, 0.06);
+
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  color: var(--ink);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.headerActions {
+  margin-left: auto;
+}
+
+.logo {
+  border-radius: 999px;
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 2px solid var(--brand-yellow);
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.dateRow {
+  margin-bottom: 20px;
+}
+
+.dateRowLabel {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.dateInput,
+.textInput {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.datePicker {
+  max-width: 320px;
+}
+
+.datePickerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.datePickerTitle {
+  font-weight: 700;
+  color: var(--brand);
+  text-transform: capitalize;
+}
+
+.datePickerNav {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--brand);
+}
+
+.datePickerNav:hover:not(:disabled) {
+  background: #eef4ff;
+}
+
+.datePickerNav:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.datePickerWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.datePickerGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.datePickerDay {
+  aspect-ratio: 1;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.datePickerDay:hover:not(:disabled) {
+  background: var(--available-hover);
+}
+
+.datePickerDay:disabled {
+  color: var(--muted);
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.datePickerDayOutside {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.datePickerDaySelected {
+  background: var(--brand);
+  color: white;
+  font-weight: 700;
+}
+
+.datePickerDaySelected:hover {
+  background: var(--brand-dark);
+}
+
+.datePickerDayToday {
+  border: 1.5px solid var(--brand-yellow);
+  font-weight: 700;
+}
+
+.slotGrid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+
+.slotButton {
+  padding: 10px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok-dark);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+
+.slotButton:hover:not(:disabled) {
+  background: var(--ok-hover);
+  border-color: var(--brand);
+}
+
+.slotButtonSelected {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: white;
+}
+
+.slotButtonSelected:hover:not(:disabled) {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+
+/* Forhåndsvisning ved museover (kun pekerenheter med ekte hover – se
+   supportsHover i BookingCalendar.tsx) – BEGGE halvtimene i timen du holder
+   musen over får denne samme, lysere blå tonen (ingen fargeforskjell mellom
+   dem), og flyter visuelt sammen via .mergeLeft/.mergeRight + slotBridge
+   under, slik at det ser ut som du peker på ÉN sammenhengende time. */
+.slotButtonHoverPreview {
+  background: #eef4ff;
+  border-color: var(--brand);
+  color: var(--brand-dark);
+}
+
+/*
+ * Sammenhengende celler i SAMME visuelle tilstand (valgt, hover-
+ * forhåndsvisning, eller fysisk opptatt av en ekte booking) flyter sammen
+ * til én blokk: kanten/hjørnet som vender mot naboen fjernes her, og selve
+ * mellomrommet dekkes av en "bro" (.slotBridge under) i samme farge – CSS
+ * grid sitt `gap` kan ikke skrus av per par, så broen measures og tegnes via
+ * JS (se lib/useSlotMerging.ts).
+ */
+.slotButton.mergeRight {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.slotButton.mergeLeft {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: none;
+}
+
+.slotBridge {
+  position: absolute;
+  pointer-events: none;
+}
+
+.slotBridgeSelected {
+  background: var(--brand);
+}
+
+.slotBridgeHoverPreview {
+  background: #eef4ff;
+}
+
+.slotBridgeBooked {
+  background: var(--conflict-bg);
+}
+
+.slotBridgeBlocked {
+  background: var(--taken);
+}
+
+/* Opptatt (ikke passert): rødt og gjennomstreket. */
+.slotButton:disabled {
+  background: var(--conflict-bg);
+  border-color: var(--conflict-border);
+  color: var(--danger-dark);
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+/* Passerte klokkeslett grånes og nedtones i stedet for å vises som røde/opptatte,
+   slik at "dette er historie" ikke ser ut som "noen andre har tatt den". Samme
+   nedtoning brukes for "adjacent" – en halvtime som er ledig i seg selv, men som
+   ikke kan velges som START fordi en hel time herfra ville krysset en
+   nabobooking (se reason-feltet fra /api/squash/availability) – det er heller
+   ikke "noen andre har tatt akkurat denne halvtimen", bare at det ikke er plass
+   til en hel økt derfra. */
+.slotButton.slotButtonPast:disabled,
+.slotButton.slotButtonAdjacent:disabled {
+  background: var(--taken);
+  border-color: var(--border);
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0.55;
+}
+
+.emptyState {
+  color: var(--muted);
+  padding: 12px 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.formRow label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+.formRow input[type="text"],
+.formRow input[type="tel"],
+.formRow input[type="number"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.radioRow {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.radioOption,
+.checkboxOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.previewList {
+  margin-top: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.previewRowOk,
+.previewRowConflict {
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.previewRowOk {
+  background: var(--ok-bg);
+}
+
+.previewRowConflict {
+  background: var(--conflict-bg);
+  color: var(--danger-dark);
+  font-weight: 600;
+}
+
+.previewRowOk:last-child,
+.previewRowConflict:last-child {
+  border-bottom: none;
+}
+
+.summary {
+  font-size: 0.95rem;
+  padding: 10px 12px;
+  background: var(--available);
+  border-radius: 8px;
+}
+
+.submitButton {
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--brand);
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.submitButton:hover:not(:disabled) {
+  background: var(--brand-dark);
+}
+
+.submitButton:disabled {
+  background: var(--taken);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  padding: 10px 14px;
+  border: 1.5px solid var(--brand);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--brand);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.secondaryButton:hover {
+  background: #eef4ff;
+}
+
+.dangerButton {
+  padding: 8px 12px;
+  border: 1px solid var(--conflict-border);
+  border-radius: 8px;
+  background: var(--conflict-bg);
+  color: var(--danger-dark);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.error {
+  color: var(--danger-dark);
+  background: var(--conflict-bg);
+  border: 1px solid var(--conflict-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.status {
+  text-align: center;
+  padding: 48px 16px;
+}
+
+.statusIcon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.subtitleText {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 4px 0 0;
+}
+
+.statusActions {
+  margin-top: 24px;
+}
+
+.statusActions a {
+  text-decoration: none;
+}
