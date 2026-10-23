@@ -41,7 +41,16 @@ function toBase64Url(bytes: ArrayBuffer | Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function fromBase64Url(value: string): Uint8Array {
+/**
+ * Returtypen er eksplisitt `Uint8Array<ArrayBuffer>` (ikke bare `Uint8Array`)
+ * siden nyere TypeScript ellers widener den bare aliasen til
+ * `Uint8Array<ArrayBufferLike>` (som også dekker SharedArrayBuffer) –
+ * `crypto.subtle.verify()` sitt `BufferSource`-parameter godtar ikke den
+ * bredere typen. Verdien er uansett alltid et ekte, ikke-delt ArrayBuffer her
+ * (opprettet rett over via `new Uint8Array(binary.length)`), så dette er kun
+ * en presisering av typen, ingen endring i faktisk oppførsel.
+ */
+function fromBase64Url(value: string): Uint8Array<ArrayBuffer> {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
   const binary = atob(padded);
   const bytes = new Uint8Array(binary.length);

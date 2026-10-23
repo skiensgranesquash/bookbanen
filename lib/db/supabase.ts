@@ -341,7 +341,7 @@ export const supabaseRepository: BookingRepository = {
       if (slotError) throw new Error(`Kunne ikke flytte tidsrommet: ${slotError.message}`);
     }
 
-    const groupPatch: Record<string, string> = {};
+    const groupPatch: { customer_name?: string; customer_phone?: string } = {};
     if (patch.customerName !== undefined) groupPatch.customer_name = patch.customerName;
     if (patch.customerPhone !== undefined) groupPatch.customer_phone = patch.customerPhone;
 
@@ -383,7 +383,9 @@ export const supabaseRepository: BookingRepository = {
       if (slotError) throw new Error(`Kunne ikke flytte tidsrommet: ${slotError.message}`);
     }
 
-    const groupPatch: Record<string, string> = { status: "confirmed" };
+    const groupPatch: { status: string; customer_name?: string; customer_phone?: string } = {
+      status: "confirmed",
+    };
     if (patch.customerName !== undefined) groupPatch.customer_name = patch.customerName;
     if (patch.customerPhone !== undefined) groupPatch.customer_phone = patch.customerPhone;
 

@@ -45,7 +45,7 @@ function emptyDb(): DbShape {
 
 /** Eldre lagrede bookinger (fra før `source`-feltet fantes) mangler feltet – de regnes som vanlige kundebookinger. */
 function normalizeGroup(group: BookingGroup): BookingGroup {
-  return { source: "customer", ...group };
+  return { ...group, source: group.source ?? "customer" };
 }
 
 async function loadDb(): Promise<DbShape> {
