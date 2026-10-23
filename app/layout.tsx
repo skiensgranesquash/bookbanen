@@ -1,14 +1,13 @@
 import type { ReactNode } from "react";
 
 export const metadata = {
-  title: "IF Skiens Grane – Squashbooking (lokal testversjon)",
+  title: "IF Skiens Grane – Squashbooking",
 };
 
 /**
- * Root layout for TESTVERSJONEN. Bruker klubbens egen font (DM Sans) og
- * fargepalett (marineblå/gul, hentet direkte fra skiensgrane.no) slik at
- * Helge kan se og teste bookingløsningen med riktig visuelt uttrykk FØR den
- * flyttes inn i hovedprosjektet.
+ * Root layout for produksjon (bookbanen.no). Bruker klubbens egen font
+ * (DM Sans) og fargepalett (marineblå/gul, hentet direkte fra
+ * skiensgrane.no).
  *
  * NB: DM Sans lastes her med en vanlig <link>-tag (slik de fleste nettsider
  * gjør det) i stedet for next/font/google. next/font/google laster ned
@@ -18,12 +17,12 @@ export const metadata = {
  * i stedet nettleseren (ikke serveren) som henter fonten, akkurat som på en
  * vanlig nettside – det kan aldri blokkere oppstarten av appen.
  *
- * Selve stripen under er en tydelig markert, midlertidig "vi tester
- * dette"-bjelke – IKKE et forsøk på å kopiere klubbens ekte meny. Når
- * app/squash/booking og app/admin flyttes inn i det eksisterende
- * skiensgrane.no-prosjektet, fjernes denne fila/stripen helt – da arver
- * sidene det virkelige root-layoutet (ekte meny, footer osv.) som allerede
- * finnes der.
+ * Stripen under var opprinnelig en midlertidig "vi tester dette"-bjelke fra
+ * da dette kjørte som en lokal testversjon ment for å flyttes inn i
+ * skiensgrane.no-prosjektet. Planen endret seg underveis: bookbanen.no er nå
+ * sin egen, selvstendige produksjonsside – stripen er derfor beholdt som en
+ * enkel merkevare-header (logo + klubbnavn), men "testes lokalt"-teksten er
+ * fjernet siden den ikke lenger stemmer.
  */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -76,9 +75,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </div>
             <span style={{ fontWeight: 700, color: "#0046b3", fontSize: "0.95rem" }}>IF Skiens Grane Squash</span>
           </div>
-          <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-            Forhåndsvisning – testes lokalt før den legges inn på skiensgrane.no
-          </span>
         </div>
         {children}
       </body>
