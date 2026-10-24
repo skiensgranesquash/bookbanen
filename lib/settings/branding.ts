@@ -17,7 +17,7 @@ import { CLUB_NAME } from "@/lib/config";
  * `clubName` er tomt som standard (bruker CLUB_NAME fra lib/config.ts som
  * fabrikk-standard helt til noen faktisk har satt et eget navn), og
  * `logoDataUrl` er null som standard (da vises den medfølgende
- * public/logo-squash.jpg – se app/squash/booking/page.tsx).
+ * public/logo-squash.jpg – se app/page.tsx).
  */
 
 const CLUB_NAME_KEY = "brandingClubName";

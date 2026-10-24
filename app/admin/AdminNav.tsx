@@ -49,7 +49,7 @@ export default function AdminNav({ active }: { active: AdminNavKey }) {
           ))}
         </div>
         <div className={styles.navActions}>
-          <a href="/squash/booking" className={styles.secondaryButton}>
+          <a href="/" className={styles.secondaryButton}>
             Til bookingsiden
           </a>
           <button type="button" className={styles.secondaryButton} onClick={handleLogout}>

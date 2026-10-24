@@ -4,8 +4,8 @@ import type { PaymentProvider } from "./types";
 /**
  * Simulert betaling for lokal testing – ingen nettverkskall, ingen ekte
  * Vipps-konto nødvendig. "Redirect-URL-en" peker til vår egen side
- * (/squash/booking/mock-vipps) som ser ut som en enkel Vipps-lignende
- * bekreftelsesdialog, der DU selv trykker "godkjenn" eller "avbryt".
+ * (/mock-vipps) som ser ut som en enkel Vipps-lignende bekreftelsesdialog,
+ * der DU selv trykker "godkjenn" eller "avbryt".
  *
  * Byttes til lib/payments/vipps.ts ved å sette PAYMENT_PROVIDER=vipps (se
  * lib/config.ts og README).
@@ -18,7 +18,7 @@ export const mockPaymentProvider: PaymentProvider = {
       desc: description,
       returnUrl,
     });
-    return { redirectUrl: `/squash/booking/mock-vipps?${params.toString()}` };
+    return { redirectUrl: `/mock-vipps?${params.toString()}` };
   },
 
   async reconcilePendingPayment() {

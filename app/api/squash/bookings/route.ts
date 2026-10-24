@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
       amountOre: totalAmountOre,
       phoneNumber: phone,
       description,
-      returnUrl: `${siteUrl}/squash/booking/confirmation?ref=${bookingId}`,
+      returnUrl: `${siteUrl}/confirmation?ref=${bookingId}`,
     });
 
     return NextResponse.json({

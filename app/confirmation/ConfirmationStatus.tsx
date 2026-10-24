@@ -129,7 +129,7 @@ export default function ConfirmationStatus() {
 
       {status !== "loading" && status !== "pending" && (
         <div className={styles.statusActions}>
-          <a href="/squash/booking" className={styles.secondaryButton}>
+          <a href="/" className={styles.secondaryButton}>
             {status === "confirmed" ? "Book en ny time" : "Tilbake til booking"}
           </a>
         </div>
