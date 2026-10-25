@@ -51,6 +51,11 @@ export default async function SquashBookingPage() {
         </div>
       </div>
 
+      <p className={styles.membershipNotice}>
+        For å booke bane må du ha tilgang til banen gjennom medlemskap i Skiens Grane Squash eller Mova Skien. Du
+        bekrefter dette før du går videre til betaling.
+      </p>
+
       <BookingCalendar />
     </main>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import styles from "./booking.module.css";
 import DatePicker from "./DatePicker";
 import {
@@ -137,8 +137,12 @@ export default function BookingCalendar() {
 
   const [name, setName] = useState(() => readRemembered(REMEMBERED_NAME_KEY));
   const [phone, setPhone] = useState(() => readRemembered(REMEMBERED_PHONE_KEY));
+  const [membershipConfirmed, setMembershipConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const submitButtonRef = useRef<HTMLButtonElement | null>(null);
+  const wasMembershipConfirmed = useRef(false);
 
   // Husk navn/telefon i nettleseren fortløpende mens man skriver, slik at
   // neste besøk (eller neste booking rett etter) har feltene forhåndsutfylt.
@@ -149,21 +153,37 @@ export default function BookingCalendar() {
     writeRemembered(REMEMBERED_PHONE_KEY, phone);
   }, [phone]);
 
-  // Oppdateres jevnlig slik at tidspunkter som akkurat passerte "nå" gråes ut
-  // uten at brukeren må laste siden på nytt.
+  // Når man nettopp har hakt AV medlemskapsboksen (fra ukrysset til krysset
+  // av) – skroll ned slik at Vipps-knappen kommer i bildet, i stedet for at
+  // man selv må scrolle forbi resten av formen for å finne den.
+  useEffect(() => {
+    if (membershipConfirmed && !wasMembershipConfirmed.current) {
+      submitButtonRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    wasMembershipConfirmed.current = membershipConfirmed;
+  }, [membershipConfirmed]);
+
+  // Oppdateres jevnlig slik at tidspunkter som akkurat passerte "nå" forsvinner
+  // fra rutenettet uten at brukeren må laste siden på nytt.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(interval);
   }, []);
 
-  const selectedIndex = slots.findIndex((s) => s.label === selectedLabel);
-  const selectedSecondHalfIndex = secondHalfIndex(slots, selectedIndex);
-  const hoveredIndex = supportsHover ? slots.findIndex((s) => s.label === hoveredLabel) : -1;
-  const hoveredSecondHalfIndex = hoveredIndex >= 0 ? secondHalfIndex(slots, hoveredIndex) : -1;
+  // Passerte klokkeslett vises ikke i det hele tatt (ikke bare gråes ut) –
+  // rutenettet starter rett på det første tilgjengelige tidspunktet for i
+  // dag, slik at man ikke må forholde seg til (eller scrolle forbi) en lang
+  // rekke med tider som uansett aldri kan velges.
+  const visibleSlots = useMemo(() => slots.filter((s) => !isPastStart(s, now)), [slots, now]);
+
+  const selectedIndex = visibleSlots.findIndex((s) => s.label === selectedLabel);
+  const selectedSecondHalfIndex = secondHalfIndex(visibleSlots, selectedIndex);
+  const hoveredIndex = supportsHover ? visibleSlots.findIndex((s) => s.label === hoveredLabel) : -1;
+  const hoveredSecondHalfIndex = hoveredIndex >= 0 ? secondHalfIndex(visibleSlots, hoveredIndex) : -1;
   const bookingEndLabel =
-    selectedIndex >= 0 && isBookableSlot(slots, selectedIndex)
-      ? formatOslo(slots[selectedIndex].endTime, "HH:mm")
+    selectedIndex >= 0 && isBookableSlot(visibleSlots, selectedIndex)
+      ? formatOslo(visibleSlots[selectedIndex].endTime, "HH:mm")
       : null;
 
   /**
@@ -174,22 +194,23 @@ export default function BookingCalendar() {
    * samme for forhåndsvisning ved museover, "booked" er en halvtime som
    * FYSISK overlapper en ekte booking (rødt, flyter sammen med naboceller i
    * samme tilstand – f.eks. en 2-timers booking dekker 4 halvtimer), og
-   * "blocked" er passert ELLER kun blokkert som starttidspunkt (grått).
+   * "blocked" er en halvtime som kun er blokkert som starttidspunkt (grått –
+   * passerte tidspunkter er allerede filtrert bort av visibleSlots over, så
+   * denne tilstanden gjelder i praksis bare "adjacent").
    */
   function stateFor(i: number): SlotVisualState {
-    const slot = slots[i];
+    const slot = visibleSlots[i];
     if (i === selectedIndex || (selectedSecondHalfIndex >= 0 && i === selectedSecondHalfIndex)) return "selected";
     if (i === hoveredIndex || (hoveredSecondHalfIndex >= 0 && i === hoveredSecondHalfIndex)) return "hover";
-    if (isPastStart(slot, now)) return "blocked";
     if (!slot.available) return slot.reason === "booked" ? "booked" : "blocked";
     return "normal";
   }
 
-  const mergeSlots = useMemo(() => slots.map((s) => ({ startTime: s.startTime, key: s.label })), [slots]);
+  const mergeSlots = useMemo(() => visibleSlots.map((s) => ({ startTime: s.startTime, key: s.label })), [visibleSlots]);
   const { containerRef, registerButtonRef, mergeLeft, mergeRight, bridges } = useSlotMerging(
     mergeSlots,
     (_mSlot, i) => stateFor(i),
-    [selectedIndex, selectedSecondHalfIndex, hoveredIndex, hoveredSecondHalfIndex, now]
+    [selectedIndex, selectedSecondHalfIndex, hoveredIndex, hoveredSecondHalfIndex]
   );
 
   // Hent ledige tider for valgt dag.
@@ -290,7 +311,12 @@ export default function BookingCalendar() {
   const occurrenceCount = recurring ? weeks : 1;
   const totalPrice =
     recurring && preview ? preview.totalAmountOre : PRICE_PER_SLOT_ORE * BOOKING_DURATION_SLOTS * occurrenceCount;
-  const canSubmit = selectedLabel && name.trim().length >= 2 && phone.trim().length > 0 && (!recurring || preview?.allAvailable);
+  const canSubmit =
+    !!selectedLabel &&
+    membershipConfirmed &&
+    name.trim().length >= 2 &&
+    phone.trim().length > 0 &&
+    (!recurring || preview?.allAvailable);
 
   return (
     <>
@@ -308,23 +334,26 @@ export default function BookingCalendar() {
               : "Ingen bookbare tider denne dagen."}
           </p>
         )}
+        {!loadingSlots && slots.length > 0 && visibleSlots.length === 0 && (
+          <p className={styles.emptyState}>Ingen flere ledige tider i dag.</p>
+        )}
 
-        {!loadingSlots && slots.length > 0 && (
+        {!loadingSlots && visibleSlots.length > 0 && (
           <>
             <div className={styles.slotGrid} ref={containerRef}>
-              {slots.map((slot, i) => {
-                const past = isPastStart(slot, now);
-                const bookable = !past && isBookableSlot(slots, i);
+              {visibleSlots.map((slot, i) => {
+                const bookable = isBookableSlot(visibleSlots, i);
                 const state = stateFor(i);
                 const classNames = [styles.slotButton];
                 if (state === "selected") classNames.push(styles.slotButtonSelected);
                 else if (state === "hover") classNames.push(styles.slotButtonHoverPreview);
-                // "Passert" og "kan ikke starte en hel time her uten å krysse en
-                // nabobooking" nedtones likt (grått) – ingen av delene betyr at
-                // nettopp DENNE halvtimen i seg selv er booket, i motsetning til
-                // "booked" (rødt/gjennomstreket, og fysisk opptatt – se reason i
-                // app/api/squash/availability/route.ts).
-                else if (state === "blocked") classNames.push(past ? styles.slotButtonPast : styles.slotButtonAdjacent);
+                // En halvtime som i seg selv er ledig, men der en ny hel time
+                // ikke kan STARTE akkurat her uten å krysse inn i en
+                // nabobooking, nedtones grått (se reason i
+                // app/api/squash/availability/route.ts) – det er ikke noen
+                // som faktisk har tatt akkurat denne halvtimen, i motsetning
+                // til "booked" (rødt/gjennomstreket, fysisk opptatt).
+                else if (state === "blocked") classNames.push(styles.slotButtonAdjacent);
                 // Sammenhengende celler i SAMME tilstand (valgt time, hover-
                 // forhåndsvisning, eller en ekte bookings egne halvtimer) flyter
                 // visuelt sammen til én blokk – se useSlotMerging.
@@ -369,8 +398,8 @@ export default function BookingCalendar() {
             <p className={styles.subtitleText}>
               Hver booking varer {formatDurationMinutes(BOOKING_DURATION_MINUTES)} – velger du et klokkeslett flyter
               begge halvtimene sammen til én blokk, slik at det er tydelig at hele timen følger med. Grønt er ledig,
-              rødt er fysisk opptatt (og flyter sammen på samme måte). Grått er enten passert, eller at en hel time
-              rett og slett ikke får plass her uten å krysse en annen økt.
+              rødt er fysisk opptatt (og flyter sammen på samme måte). Grått er at en hel time rett og slett ikke får
+              plass her uten å krysse en annen økt.
             </p>
           </>
         )}
@@ -384,6 +413,17 @@ export default function BookingCalendar() {
               {formatOslo(date, "EEEE d. MMMM")}, kl. {selectedLabel}
               {bookingEndLabel ? `–${bookingEndLabel}` : ""} ({formatDurationMinutes(BOOKING_DURATION_MINUTES)})
             </p>
+          </div>
+
+          <div className={styles.formRow}>
+            <label className={styles.membershipConfirm}>
+              <input
+                type="checkbox"
+                checked={membershipConfirmed}
+                onChange={(e) => setMembershipConfirmed(e.target.checked)}
+              />
+              Jeg bekrefter at jeg har tilgang til banen gjennom medlemskap i Skiens Grane Squash eller Mova Skien.
+            </label>
           </div>
 
           <div className={styles.formRow}>
@@ -463,7 +503,12 @@ export default function BookingCalendar() {
 
           {errorMessage && <p className={styles.error}>{errorMessage}</p>}
 
-          <button type="submit" className={styles.submitButton} disabled={submitting || !canSubmit}>
+          <button
+            ref={submitButtonRef}
+            type="submit"
+            className={styles.submitButton}
+            disabled={submitting || !canSubmit}
+          >
             {submitting ? "Starter Vipps …" : `Betal ${formatPriceOre(totalPrice)} med Vipps`}
           </button>
         </form>
