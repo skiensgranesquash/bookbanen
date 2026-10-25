@@ -23,6 +23,7 @@ import {
 import { formatDurationMinutes } from "@/lib/formatting";
 import { getPaymentProviderImpl } from "@/lib/payments";
 import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHours";
+import { getRecurringCutoffDate } from "@/lib/settings/recurringLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,24 @@ export async function POST(request: NextRequest) {
   }
 
   const dates = mode === "recurring" ? generateWeeklyDates(date, weeks) : [date];
+
+  // Klubbens egen, admin-styrte grense for hvor langt frem i tid en
+  // gjentakende booking har lov til å gå (se lib/settings/recurringLimit.ts)
+  // – uavhengig av MAX_RECURRING_WEEKS over, og sjekket her på nytt (ikke
+  // bare i forhåndsvisningen kunden så FØR betaling), siden dette er den
+  // ekte, atomiske opprettelsen.
+  if (mode === "recurring") {
+    const cutoffDate = await getRecurringCutoffDate();
+    if (cutoffDate && dates.some((d) => d > cutoffDate)) {
+      return NextResponse.json(
+        {
+          error: `Rekken går forbi siste tillatte dato for gjentakende bookinger (${cutoffDate}) – juster antall uker eller startdato.`,
+        },
+        { status: 400 }
+      );
+    }
+  }
+
   const occurrences = dates.map((d) => occurrenceRange(d, time, durationSlots));
 
   if (occurrences.some((o) => !o)) {

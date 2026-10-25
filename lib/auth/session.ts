@@ -1,4 +1,5 @@
 import "server-only";
+import type { AdminRole } from "@/lib/db/types";
 
 /**
  * Signert sesjonscookie for adminpanelet – uten NextAuth/Auth.js, og uten
@@ -9,13 +10,21 @@ import "server-only";
  *
  * Cookien er `<base64url(JSON-payload)>.<base64url(HMAC-SHA256-signatur)>`.
  * Payload er ikke hemmelig (ikke passord der), men er signert slik at den
- * ikke kan forfalskes eller endres av brukeren.
+ * ikke kan forfalskes eller endres av brukeren – inkludert `role`-feltet, som
+ * middleware.ts stoler på direkte UTEN et eget databaseoppslag for hver
+ * forespørsel, nettopp fordi det ikke kan forfalskes.
+ *
+ * `import type` (ikke en vanlig import) for AdminRole under – fjernes helt av
+ * TypeScript ved kompilering, så dette drar IKKE inn resten av lib/db i
+ * Edge-bunten.
  */
 
 export interface SessionPayload {
   sub: string; // admin-bruker-id
   email: string;
   name: string;
+  /** "full" | "bookings_only" – se AdminRole i lib/db/types.ts og håndhevingen i middleware.ts. */
+  role: AdminRole;
   exp: number; // unix-tid (sekunder) sesjonen utløper
 }
 
@@ -62,11 +71,13 @@ export async function createSessionCookieValue(user: {
   id: string;
   email: string;
   name: string;
+  role: AdminRole;
 }): Promise<string> {
   const payload: SessionPayload = {
     sub: user.id,
     email: user.email,
     name: user.name,
+    role: user.role,
     exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
   };
 
@@ -100,6 +111,7 @@ const TEST_SESSION: SessionPayload = {
   sub: "test-admin-lokal-testing",
   email: "test@lokal.test",
   name: "Test-admin (innlogging avslått – se .env.local)",
+  role: "full",
   exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365,
 };
 
@@ -127,6 +139,11 @@ export async function verifySessionCookieValue(
     if (typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) {
       return null;
     }
+    // Eldre sesjonscookies (satt før `role`-feltet fantes) mangler feltet –
+    // de regnes som fulle administratorer, akkurat som kontoen alltid har
+    // vært. Cookien fornyes uansett med riktig rolle neste gang brukeren
+    // logger inn på nytt (senest om 7 dager, se SESSION_MAX_AGE_SECONDS).
+    if (!payload.role) payload.role = "full";
     return payload;
   } catch {
     return null;

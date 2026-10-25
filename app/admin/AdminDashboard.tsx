@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import styles from "./admin.module.css";
 import { formatOslo, formatPriceOre } from "@/lib/formatting";
 import BookingsInsights, { Leaderboard } from "./BookingsInsights";
@@ -51,6 +52,53 @@ function statusBadge(booking: BookingRow): { label: string; className: string } 
     : { label: "Betalt", className: "badgeConfirmed" };
 }
 
+/** Antall kalenderdager fra admins egen enhets-klokke til "YYYY-MM-DD"-datoen – kan være negativt (datoen har passert). */
+function daysUntil(dateStr: string): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const target = Date.UTC(y, m - 1, d);
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((target - today) / 86_400_000);
+}
+
+/**
+ * Påminnelse om klubbens egen grense for gjentakende bookinger (satt under
+ * Åpningstider → "Grense for gjentakende bookinger", se
+ * lib/settings/recurringLimit.ts) – vises øverst her siden dette er den
+ * første siden admin ser etter innlogging. Rødt og værende hver dag etter
+ * at datoen har passert, gult siste uke før den passerer, usynlig resten av
+ * tiden (eller når ingen dato er satt).
+ */
+function RecurringCutoffReminder({ cutoffDate }: { cutoffDate: string | null }) {
+  if (!cutoffDate) return null;
+  const days = daysUntil(cutoffDate);
+  if (days > 7) return null;
+
+  const formatted = formatOslo(cutoffDate, "d. MMMM yyyy");
+  const passed = days < 0;
+
+  return (
+    <div className={`${styles.reminderBanner} ${passed ? styles.reminderBannerDanger : styles.reminderBannerWarning}`}>
+      <span>
+        {passed ? (
+          <>
+            Siste dato for gjentakende bookinger ({formatted}) har passert. Nye gjentakende bookinger kan ikke lenger
+            opprettes forbi denne datoen.
+          </>
+        ) : (
+          <>
+            Siste dato for gjentakende bookinger ({formatted}) nærmer seg –{" "}
+            {days === 0 ? "i dag" : `${days} ${days === 1 ? "dag" : "dager"} igjen`}.
+          </>
+        )}
+      </span>
+      <Link href="/admin/opening-hours" className={styles.secondaryButton}>
+        {passed ? "Sett ny dato" : "Se/endre dato"}
+      </Link>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
 
@@ -59,6 +107,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [recurringCutoff, setRecurringCutoff] = useState<string | null>(null);
 
   const loadBookings = useCallback(async () => {
     setLoading(true);
@@ -90,6 +139,19 @@ export default function AdminDashboard() {
 
     loadBookings();
   }, [router, loadBookings]);
+
+  // Grensen for gjentakende bookinger – egen, uavhengig henting, siden den
+  // ikke er del av /api/admin/bookings sitt svar.
+  useEffect(() => {
+    fetch("/api/admin/settings/recurring-limit", { cache: "no-store" })
+      .then((res) => (res.ok ? (res.json() as Promise<{ cutoffDate: string | null }>) : null))
+      .then((data) => {
+        if (data) setRecurringCutoff(data.cutoffDate ?? null);
+      })
+      .catch(() => {
+        // Ikke kritisk – admin ser bare ikke påminnelsen denne gangen.
+      });
+  }, []);
 
   async function handleCancel(id: string, label: string) {
     if (!window.confirm(`Avlyse "${label}"? Dette kan ikke angres.`)) return;
@@ -123,6 +185,8 @@ export default function AdminDashboard() {
         <div className={styles.tabPanel}>
           <h1 className={styles.title}>Bookinger</h1>
           {user && <p className={styles.subtitle}>Innlogget som {user.name}</p>}
+
+          <RecurringCutoffReminder cutoffDate={recurringCutoff} />
 
           {!loading && !error && (
             <BookingsInsights bookings={bookings} onChanged={loadBookings} onCancel={handleCancel} />

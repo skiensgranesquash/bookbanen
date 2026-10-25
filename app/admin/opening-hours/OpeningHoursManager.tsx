@@ -144,6 +144,14 @@ export default function OpeningHoursManager() {
   const [savingExceptions, setSavingExceptions] = useState(false);
   const [excMessage, setExcMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Siste dato for gjentakende bookinger (se lib/settings/recurringLimit.ts)
+  // – egen, uavhengig henting/lagring, siden den ligger i et helt eget
+  // API-endepunkt (ikke en del av /api/admin/settings/hours).
+  const [cutoffDate, setCutoffDate] = useState("");
+  const [cutoffLoading, setCutoffLoading] = useState(true);
+  const [savingCutoff, setSavingCutoff] = useState(false);
+  const [cutoffMessage, setCutoffMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
   useEffect(() => {
     fetch("/api/admin/settings/hours", { cache: "no-store" })
       .then((res) => {
@@ -156,6 +164,19 @@ export default function OpeningHoursManager() {
       })
       .catch(() => setLoadError("Kunne ikke hente åpningstider akkurat nå."))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/admin/settings/recurring-limit", { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Kunne ikke hente grensen.");
+        return res.json() as Promise<{ cutoffDate: string | null }>;
+      })
+      .then((data) => setCutoffDate(data.cutoffDate ?? ""))
+      .catch(() => {
+        // Ikke kritisk nok til å blokkere resten av siden – feltet starter bare tomt.
+      })
+      .finally(() => setCutoffLoading(false));
   }, []);
 
   const exceptionByDate = useMemo(() => {
@@ -187,6 +208,55 @@ export default function OpeningHoursManager() {
       setWeeklyMessage({ ok: false, text: "Kunne ikke lagre akkurat nå." });
     } finally {
       setSavingWeekly(false);
+    }
+  }
+
+  async function handleSaveCutoff(e: FormEvent) {
+    e.preventDefault();
+    setSavingCutoff(true);
+    setCutoffMessage(null);
+
+    try {
+      const res = await fetch("/api/admin/settings/recurring-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cutoffDate: cutoffDate || null }),
+      });
+      const data = (await res.json()) as { error?: string; cutoffDate?: string | null };
+      if (!res.ok) {
+        setCutoffMessage({ ok: false, text: data.error ?? "Kunne ikke lagre." });
+        return;
+      }
+      setCutoffDate(data.cutoffDate ?? "");
+      setCutoffMessage({ ok: true, text: data.cutoffDate ? "Dato lagret." : "Grense fjernet." });
+    } catch {
+      setCutoffMessage({ ok: false, text: "Kunne ikke lagre akkurat nå." });
+    } finally {
+      setSavingCutoff(false);
+    }
+  }
+
+  async function handleClearCutoff() {
+    setSavingCutoff(true);
+    setCutoffMessage(null);
+
+    try {
+      const res = await fetch("/api/admin/settings/recurring-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cutoffDate: null }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setCutoffMessage({ ok: false, text: data.error ?? "Kunne ikke fjerne." });
+        return;
+      }
+      setCutoffDate("");
+      setCutoffMessage({ ok: true, text: "Grense fjernet – kun maks antall uker gjelder nå." });
+    } catch {
+      setCutoffMessage({ ok: false, text: "Kunne ikke fjerne akkurat nå." });
+    } finally {
+      setSavingCutoff(false);
     }
   }
 
@@ -305,6 +375,46 @@ export default function OpeningHoursManager() {
         <div className={styles.tabPanel}>
           <h1 className={styles.title}>Åpningstider</h1>
           <p className={styles.subtitle}>Standard åpningstider per ukedag, pluss ferier og andre annerledesdager.</p>
+
+      <div className={styles.card}>
+        <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Grense for gjentakende bookinger</h2>
+        <p className={styles.bookingMeta}>
+          Siste dato en gjentakende (ukentlig) booking har lov til å dekke. Du får en påminnelse her i adminpanelet
+          når datoen nærmer seg (siste uke før den passerer), og hver dag etter at den har passert – helt til du
+          setter en ny dato. La feltet stå tomt for å kun bruke det vanlige maks-antallet uker.
+        </p>
+        {cutoffLoading ? (
+          <p>Laster …</p>
+        ) : (
+          <form onSubmit={handleSaveCutoff} className={styles.form}>
+            <div className={styles.formRow}>
+              <label htmlFor="recurring-cutoff">Siste dato</label>
+              <input
+                id="recurring-cutoff"
+                type="date"
+                value={cutoffDate}
+                onChange={(e) => setCutoffDate(e.target.value)}
+              />
+            </div>
+
+            {cutoffMessage && <p className={cutoffMessage.ok ? styles.success : styles.error}>{cutoffMessage.text}</p>}
+
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <button type="submit" className={styles.submitButton} disabled={savingCutoff || !cutoffDate}>
+                {savingCutoff ? "Lagrer …" : "Lagre dato"}
+              </button>
+              <button
+                type="button"
+                className={styles.dangerButton}
+                disabled={savingCutoff || !cutoffDate}
+                onClick={handleClearCutoff}
+              >
+                Fjern grense
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
 
       {loading && <p>Laster …</p>}
       {loadError && <p className={styles.error}>{loadError}</p>}

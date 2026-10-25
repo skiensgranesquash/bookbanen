@@ -2,13 +2,19 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getRepository } from "../lib/db";
 import { hashPassword } from "../lib/auth/password";
+import type { AdminRole } from "../lib/db/types";
 
 /**
  * Oppretter den aller første (eller en ekstra) admin-bruker direkte i
  * databasen – det finnes ingen "registrer deg"-side i adminpanelet med
  * vilje (kun innlogging), så dette skriptet er eneste vei inn første gang.
+ * For å legge til FLERE administratorer senere (inkl. en begrenset
+ * "bookings_only"-administrator, se AdminRole i lib/db/types.ts) kan man
+ * også bruke "Legg til ny admin-bruker" under Min konto i selve
+ * adminpanelet – dette skriptet trengs da ikke lenger.
  *
- * Kjøres med: npm run create-admin -- <e-post> <navn> <passord>
+ * Kjøres med: npm run create-admin -- <e-post> <navn> <passord> [rolle]
+ *   "rolle" er valgfri: "full" (standard) eller "bookings_only".
  *
  * For å opprette brukeren i PRODUKSJONS-databasen (Supabase), sett de riktige
  * miljøvariablene foran kommandoen, f.eks.:
@@ -50,9 +56,16 @@ function loadDotEnvLocal(): void {
 async function main(): Promise<void> {
   loadDotEnvLocal();
 
-  const [, , email, name, password] = process.argv;
+  const [, , email, name, password, roleArg] = process.argv;
   if (!email || !name || !password) {
-    console.error('Bruk: npm run create-admin -- "<e-post>" "<navn>" "<passord>"');
+    console.error('Bruk: npm run create-admin -- "<e-post>" "<navn>" "<passord>" [rolle: full|bookings_only]');
+    process.exitCode = 1;
+    return;
+  }
+
+  const role: AdminRole = roleArg === "bookings_only" ? "bookings_only" : "full";
+  if (roleArg && roleArg !== "full" && roleArg !== "bookings_only") {
+    console.error(`Ukjent rolle "${roleArg}" – bruk "full" eller "bookings_only".`);
     process.exitCode = 1;
     return;
   }
@@ -72,9 +85,10 @@ async function main(): Promise<void> {
     name,
     passwordHash: hash,
     passwordSalt: salt,
+    role,
   });
 
-  console.log(`Admin-bruker opprettet: ${user.name} <${user.email}> (id: ${user.id})`);
+  console.log(`Admin-bruker opprettet: ${user.name} <${user.email}> (id: ${user.id}, rolle: ${user.role})`);
 }
 
 main().catch((err) => {

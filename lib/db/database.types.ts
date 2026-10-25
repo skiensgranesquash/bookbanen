@@ -116,6 +116,8 @@ export type Database = {
           name: string;
           password_hash: string;
           password_salt: string;
+          /** "full" | "bookings_only" – se AdminRole i lib/db/types.ts. Lagt til av migrasjonen som gir kolonnen `default 'full'`, så eksisterende rader fylles automatisk. */
+          role: string;
           created_at: string;
         };
         Insert: {
@@ -124,6 +126,7 @@ export type Database = {
           name: string;
           password_hash: string;
           password_salt: string;
+          role?: string;
           created_at?: string;
         };
         Update: {
@@ -132,6 +135,7 @@ export type Database = {
           name?: string;
           password_hash?: string;
           password_salt?: string;
+          role?: string;
           created_at?: string;
         };
         Relationships: [];

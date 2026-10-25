@@ -2,6 +2,7 @@ import "server-only";
 import { COURT_ID } from "@/lib/config";
 import { getSupabaseAdmin } from "./supabaseClient";
 import type {
+  AdminRole,
   AdminUser,
   BookingGroup,
   BookingGroupWithSlots,
@@ -414,6 +415,7 @@ export const supabaseRepository: BookingRepository = {
       name: string;
       password_hash: string;
       password_salt: string;
+      role: string | null;
       created_at: string;
     };
     return {
@@ -422,6 +424,7 @@ export const supabaseRepository: BookingRepository = {
       name: row.name,
       passwordHash: row.password_hash,
       passwordSalt: row.password_salt,
+      role: (row.role as AdminRole | null) ?? "full",
       createdAt: row.created_at,
     };
   },
@@ -435,6 +438,7 @@ export const supabaseRepository: BookingRepository = {
         name: input.name,
         password_hash: input.passwordHash,
         password_salt: input.passwordSalt,
+        role: input.role ?? "full",
       })
       .select()
       .single();
@@ -446,6 +450,7 @@ export const supabaseRepository: BookingRepository = {
       name: string;
       password_hash: string;
       password_salt: string;
+      role: string | null;
       created_at: string;
     };
     return {
@@ -454,6 +459,7 @@ export const supabaseRepository: BookingRepository = {
       name: row.name,
       passwordHash: row.password_hash,
       passwordSalt: row.password_salt,
+      role: (row.role as AdminRole | null) ?? "full",
       createdAt: row.created_at,
     };
   },
@@ -469,6 +475,7 @@ export const supabaseRepository: BookingRepository = {
         name: string;
         password_hash: string;
         password_salt: string;
+        role: string | null;
         created_at: string;
       }> | null) ?? []
     ).map((row) => ({
@@ -477,6 +484,7 @@ export const supabaseRepository: BookingRepository = {
       name: row.name,
       passwordHash: row.password_hash,
       passwordSalt: row.password_salt,
+      role: (row.role as AdminRole | null) ?? "full",
       createdAt: row.created_at,
     }));
   },

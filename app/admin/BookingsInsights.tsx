@@ -2,17 +2,15 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  addMonths,
+  addDays,
   endOfMonth,
   endOfWeek,
   eachDayOfInterval,
   format,
   isSameDay,
-  isSameMonth,
   isWithinInterval,
   startOfMonth,
   startOfWeek,
-  subMonths,
 } from "date-fns";
 import { nb } from "date-fns/locale";
 import styles from "./admin.module.css";
@@ -181,8 +179,15 @@ interface BookingsInsightsProps {
   onCancel: (id: string, label: string) => Promise<void>;
 }
 
+/** Starten (mandag) på "inneværende uke" – basert på klubbens egen tidssone (samme kilde som selectedDate under), ikke nettleserens lokale klokke. */
+function currentWeekStart(): Date {
+  return startOfWeek(parseDateOnly(todayInClubTimeZone()), { weekStartsOn: 1 });
+}
+
+/** Antall uker kalenderen viser: inneværende uke + de 4 neste – et fast, ikke-bladbart vindu (ingen historikk), se BookingsInsights.tsx sin bruk av dette under. */
+const CALENDAR_WEEKS = 5;
+
 export default function BookingsInsights({ bookings, onChanged, onCancel }: BookingsInsightsProps) {
-  const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => todayInClubTimeZone());
 
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -278,10 +283,19 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
 
     const controller = new AbortController();
     setModalSlotsLoading(true);
+    const isToday = modal.date === todayInClubTimeZone();
 
     fetch(`/api/squash/availability?date=${modal.date}`, { signal: controller.signal })
       .then((res) => res.json() as Promise<{ slots?: AvailabilitySlot[] }>)
-      .then((data) => setModalSlots(data.slots ?? []))
+      .then((data) => {
+        const slots = data.slots ?? [];
+        // Samme som den offentlige bookingsiden (se BookingCalendar.tsx):
+        // admin trenger ikke se tidspunkt som allerede har passert i dag –
+        // kun aktuelt for DAGENS dato, ikke tidligere dager (der skal hele
+        // rutenettet fortsatt vises som før, f.eks. ved redigering av en
+        // gammel enkeltbooking).
+        setModalSlots(isToday ? slots.filter((s) => new Date(s.startTime).getTime() > Date.now()) : slots);
+      })
       .catch((err) => {
         if (err?.name !== "AbortError") setModalSlots([]);
       })
@@ -338,11 +352,24 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
     return { day, week, month };
   }, [confirmedCustomerOccurrences]);
 
-  const gridStart = startOfWeek(startOfMonth(viewMonth), { weekStartsOn: 1 });
-  const gridEnd = endOfWeek(endOfMonth(viewMonth), { weekStartsOn: 1 });
-  const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+  // Fast vindu – inneværende uke + de CALENDAR_WEEKS - 1 neste, ingen bla-
+  // funksjon (admin trenger ikke se tidligere uker). Vinduet forskyver seg
+  // automatisk fremover etter hvert som dagene passerer, siden det alltid
+  // regnes ut fra dagens dato på nytt ved hver rendring.
+  const windowStart = currentWeekStart();
+  const windowEnd = addDays(windowStart, CALENDAR_WEEKS * 7 - 1);
+  const days = eachDayOfInterval({ start: windowStart, end: windowEnd });
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  // Overskrift over kalenderen: datospenn. Skriver ALLTID ut måneden på
+  // BEGGE ender når vinduet krysser et eller flere månedsskifter (f.eks.
+  // "27. okt – 30. nov 2026"), slik at det er umulig å overse – se også
+  // bcDayAltMonth/bcDayMonthStart-markeringen på selve dag-rutene under.
+  const sameMonth = format(windowStart, "LLLL yyyy", { locale: nb }) === format(windowEnd, "LLLL yyyy", { locale: nb });
+  const weekRangeLabel = sameMonth
+    ? `${format(windowStart, "d.", { locale: nb })}–${format(windowEnd, "d. MMMM yyyy", { locale: nb })}`
+    : `${format(windowStart, "d. MMM", { locale: nb })} – ${format(windowEnd, "d. MMM yyyy", { locale: nb })}`;
 
   function openCreateModal(dateStr: string) {
     setModal({ mode: "create", date: dateStr });
@@ -532,23 +559,7 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
       <div className={styles.calendarAgendaRow}>
         <div className={styles.bcWrap}>
           <div className={styles.calHeader}>
-            <button
-              type="button"
-              className={styles.calNav}
-              onClick={() => setViewMonth((m) => subMonths(m, 1))}
-              aria-label="Forrige måned"
-            >
-              ‹
-            </button>
-            <span className={styles.calTitle}>{format(viewMonth, "MMMM yyyy", { locale: nb })}</span>
-            <button
-              type="button"
-              className={styles.calNav}
-              onClick={() => setViewMonth((m) => addMonths(m, 1))}
-              aria-label="Neste måned"
-            >
-              ›
-            </button>
+            <span className={styles.calTitle}>{weekRangeLabel}</span>
           </div>
 
           <div className={styles.calWeekdays}>
@@ -558,16 +569,33 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
           </div>
 
           <div className={styles.bcGrid}>
-            {days.map((day) => {
+            {days.map((day, dayIndex) => {
               const dateStr = toDateString(day);
-              const outsideMonth = !isSameMonth(day, viewMonth);
+              const isPastDay = day.getTime() < today.getTime();
               const isToday = isSameDay(day, today);
               const isSelected = dateStr === selectedDate;
               const dayOccurrences = occurrencesByDate.get(dateStr) ?? [];
               const { visible, hiddenCount } = pickVisibleForDay(dayOccurrences);
+              // Måneden vises i tillegg til datotallet på vinduets første dag
+              // (for å alltid vite hvilken måned det starter i) OG på den 1.
+              // i måneden uansett hvor den faller – det er nettopp DER et
+              // månedsskifte skjer, så det stedet skal alltid være tydelig,
+              // ikke bare i overskriften over.
+              const showMonth = dayIndex === 0 || day.getDate() === 1;
+              // Månedsskifte-markering: annenhver måned i vinduet får en svakt
+              // avvikende bakgrunn (ALDRI nedtonet/skjult – kun en annen
+              // nyanse), og selve 1.-dagen i en ny måned får i tillegg en
+              // tydelig kantlinje, slik at de to månedene fremstår som
+              // adskilte grupper av dager uten at noe gjemmes bort.
+              const monthsFromStart =
+                (day.getFullYear() - windowStart.getFullYear()) * 12 + (day.getMonth() - windowStart.getMonth());
+              const altMonth = monthsFromStart % 2 === 1;
+              const isMonthStart = dayIndex > 0 && day.getDate() === 1;
 
               const classNames = [styles.bcDay];
-              if (outsideMonth) classNames.push(styles.bcDayOutside);
+              if (altMonth) classNames.push(styles.bcDayAltMonth);
+              if (isMonthStart) classNames.push(styles.bcDayMonthStart);
+              if (isPastDay) classNames.push(styles.bcDayPast);
               if (isToday) classNames.push(styles.bcDayToday);
               if (isSelected) classNames.push(styles.bcDaySelected);
 
@@ -586,7 +614,9 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
                   }}
                 >
                   <div className={styles.bcDayTop}>
-                    <span className={styles.bcDayNumber}>{day.getDate()}</span>
+                    <span className={styles.bcDayNumber}>
+                      {showMonth ? format(day, "d. MMM", { locale: nb }) : day.getDate()}
+                    </span>
                     <button
                       type="button"
                       className={styles.bcDayAddBtn}
@@ -714,9 +744,7 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
               {rangeSubmitting ? "Blokkerer …" : "Blokker"}
             </button>
           </form>
-        </div>
 
-        <div className={styles.agendaPanel}>
           <div className={styles.quickBlockBox}>
             <h3 style={{ marginTop: 0, fontSize: "1rem" }}>
               Blokker {format(parseDateOnly(selectedDate), "EEEE d. MMMM", { locale: nb })}
@@ -773,7 +801,9 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
               </button>
             </form>
           </div>
+        </div>
 
+        <div className={styles.agendaPanel}>
           <h3 style={{ marginTop: 0, fontSize: "1rem" }}>
             Avtaler {format(parseDateOnly(selectedDate), "EEEE d. MMMM", { locale: nb })}
           </h3>

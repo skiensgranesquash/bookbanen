@@ -8,5 +8,5 @@ export async function GET(request: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Ikke innlogget." }, { status: 401 });
   }
-  return NextResponse.json({ name: session.name, email: session.email });
+  return NextResponse.json({ name: session.name, email: session.email, role: session.role });
 }

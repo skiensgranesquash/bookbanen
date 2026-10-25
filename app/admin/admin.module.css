@@ -165,13 +165,16 @@
   color: var(--muted);
 }
 
-.formRow input {
+.formRow input,
+.formRow select {
   width: 100%;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 1rem;
   box-sizing: border-box;
+  background: var(--surface);
+  font-family: inherit;
 }
 
 .checkboxOption {
@@ -482,7 +485,7 @@
 .calHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   margin-bottom: 10px;
 }
 
@@ -722,8 +725,19 @@
   background: var(--available);
 }
 
-.bcDayOutside {
-  opacity: 0.4;
+/** Dager før i dag (kun aktuelt for de første dagene av inneværende uke, siden kalenderen ikke lenger viser tidligere uker) – fortsatt fullt synlige og klikkbare, men visuelt nedtonet siden de sjelden er det man trenger å følge med på akkurat nå. */
+.bcDayPast {
+  opacity: 0.55;
+}
+
+/** Annenhver måned i det 5-ukers vinduet får denne svakt avvikende bakgrunnen – ALDRI nedtonet/opacity, kun en annen nyanse – slik at de to månedene fremstår som adskilte grupper uten at noen dager gjemmes bort. */
+.bcDayAltMonth {
+  background: var(--available);
+}
+
+/** Selve 1.-dagen i en ny måned (når den faller midt i vinduet) – en tydelig kantlinje som markerer nøyaktig hvor månedsskiftet skjer, i tillegg til den avvikende bakgrunnen over og månedsnavnet som da vises i datotallet. */
+.bcDayMonthStart {
+  border-left: 2.5px solid var(--brand);
 }
 
 .bcDayToday {
@@ -1138,4 +1152,29 @@
 
 .manualSlotBridgeBlocked {
   background: var(--available);
+}
+
+/* ---- Påminnelse om grense for gjentakende bookinger (Oversikt-siden) ---- */
+
+.reminderBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 14px 0;
+  font-size: 0.9rem;
+}
+
+.reminderBannerWarning {
+  background: #fef9c3;
+  border: 1px solid #fde68a;
+  color: #854d0e;
+}
+
+.reminderBannerDanger {
+  background: var(--conflict-bg);
+  border: 1px solid var(--conflict-border);
+  color: var(--danger-dark);
 }

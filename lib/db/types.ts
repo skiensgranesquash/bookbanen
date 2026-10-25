@@ -95,12 +95,23 @@ export interface CreateSuccess {
 
 export type CreateResult = CreateConflict | CreateSuccess;
 
+/**
+ * "full" = vanlig administrator, kan gjøre alt i adminpanelet. "bookings_only"
+ * = begrenset administrator, kan kun administrere Bookinger-fanen (se
+ * middleware.ts for den faktiske håndhevingen av dette, og AdminNav.tsx for
+ * hvilke faner som vises for en slik bruker). Lagret som tekst (ikke en ekte
+ * Postgres-enum) – samme mønster som BookingStatus/BookingKind, se
+ * database.types.ts.
+ */
+export type AdminRole = "full" | "bookings_only";
+
 export interface AdminUser {
   id: string;
   email: string;
   name: string;
   passwordHash: string;
   passwordSalt: string;
+  role: AdminRole;
   createdAt: string;
 }
 
@@ -193,7 +204,14 @@ export interface BookingRepository {
   ): Promise<CreateResult>;
 
   getAdminByEmail(email: string): Promise<AdminUser | null>;
-  createAdminUser(input: { email: string; name: string; passwordHash: string; passwordSalt: string }): Promise<AdminUser>;
+  createAdminUser(input: {
+    email: string;
+    name: string;
+    passwordHash: string;
+    passwordSalt: string;
+    /** Utelatt betyr "full" – bakoverkompatibelt med det eksisterende create-admin-skriptet. */
+    role?: AdminRole;
+  }): Promise<AdminUser>;
   listAdminUsers(): Promise<AdminUser[]>;
   /** Oppdaterer passordet til en admin-bruker. Kalleren har allerede verifisert nåværende passord. */
   updateAdminPassword(id: string, passwordHash: string, passwordSalt: string): Promise<void>;

@@ -4,6 +4,7 @@ import BookingCalendar from "./BookingCalendar";
 import styles from "./booking.module.css";
 import { PRICE_PER_HOUR_ORE, VENUE_NAME } from "@/lib/config";
 import { getBranding } from "@/lib/settings/branding";
+import { getRecurringCutoffDate } from "@/lib/settings/recurringLimit";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { clubName } = await getBranding();
@@ -25,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * for en annen klubb/bedrift.
  */
 export default async function SquashBookingPage() {
-  const branding = await getBranding();
+  const [branding, recurringCutoffDate] = await Promise.all([getBranding(), getRecurringCutoffDate()]);
 
   return (
     <main className={styles.page}>
@@ -56,7 +57,7 @@ export default async function SquashBookingPage() {
         bekrefter dette før du går videre til betaling.
       </p>
 
-      <BookingCalendar />
+      <BookingCalendar recurringCutoffDate={recurringCutoffDate} />
     </main>
   );
 }

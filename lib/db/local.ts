@@ -48,6 +48,11 @@ function normalizeGroup(group: BookingGroup): BookingGroup {
   return { ...group, source: group.source ?? "customer" };
 }
 
+/** Eldre lagrede admin-brukere (fra før `role`-feltet fantes) mangler feltet – de regnes som fulle administratorer, akkurat som de alltid har vært. */
+function normalizeAdminUser(user: AdminUser): AdminUser {
+  return { ...user, role: user.role ?? "full" };
+}
+
 async function loadDb(): Promise<DbShape> {
   try {
     const text = await readFile(DB_PATH, "utf8");
@@ -381,7 +386,8 @@ export const localRepository: BookingRepository = {
 
   async getAdminByEmail(email) {
     const db = await loadDb();
-    return db.adminUsers.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
+    const user = db.adminUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    return user ? normalizeAdminUser(user) : null;
   },
 
   async createAdminUser(input) {
@@ -393,6 +399,7 @@ export const localRepository: BookingRepository = {
         name: input.name,
         passwordHash: input.passwordHash,
         passwordSalt: input.passwordSalt,
+        role: input.role ?? "full",
         createdAt: new Date().toISOString(),
       };
       db.adminUsers.push(user);
@@ -403,7 +410,7 @@ export const localRepository: BookingRepository = {
 
   async listAdminUsers() {
     const db = await loadDb();
-    return db.adminUsers;
+    return db.adminUsers.map(normalizeAdminUser);
   },
 
   async updateAdminPassword(id, passwordHash, passwordSalt) {

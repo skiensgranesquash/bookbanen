@@ -495,3 +495,125 @@
 .statusActions a {
   text-decoration: none;
 }
+
+/*
+ * Flytende betalingsboks (medlemskapsbekreftelse + Vipps-knapp) – ligger
+ * utenfor den vanlige side-flyten (position: fixed) og legger seg oppå
+ * resten av siden, som fortsatt er fullt scrollbar og klikkbar bak den.
+ * På smale skjermer (mobil) er den en full-bredde linje nederst i vinduet,
+ * på brede skjermer (desktop) et lite flytende kort nede til høyre – se
+ * media-spørringen nederst i denne filen.
+ */
+.floatingBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 20px rgba(17, 24, 39, 0.1);
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.floatingBarSummary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.floatingBarPrice {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.floatingBarMeta {
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.floatingBarMembership {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.floatingBarMembership input {
+  margin-top: 2px;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+/*
+ * Vipps-oransje matcher nøyaktig bakgrunnsfargen i den offisielle
+ * logofilen (public/vipps-logo.webp), slik at logoen flyter sømløst inn i
+ * selve knappen i stedet for å se ut som et eget rektangel oppå en annen
+ * oransje bakgrunn.
+ */
+.vippsButton {
+  width: 100%;
+  padding: 13px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #ff5b23;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.vippsButton:hover:not(:disabled) {
+  background: #e34f1c;
+}
+
+.vippsButton:disabled {
+  background: var(--taken);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.vippsLogo {
+  height: 22px;
+  width: auto;
+  display: block;
+  border-radius: 4px;
+}
+
+/* Gir plass nederst i formen slik at den faste boksen ikke dekker det
+   siste innholdet permanent når man scroller helt ned til bunnen. */
+.floatingBarSpacer {
+  height: 165px;
+}
+
+@media (min-width: 681px) {
+  .floatingBar {
+    left: auto;
+    right: 28px;
+    bottom: 28px;
+    width: 340px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 14px 32px rgba(17, 24, 39, 0.16);
+  }
+
+  .floatingBarSpacer {
+    height: 40px;
+  }
+}

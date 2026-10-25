@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import styles from "./booking.module.css";
 import DatePicker from "./DatePicker";
 import {
@@ -108,7 +108,12 @@ function writeRemembered(key: string, value: string) {
   }
 }
 
-export default function BookingCalendar() {
+interface BookingCalendarProps {
+  /** Siste dato en gjentakende booking har lov til å dekke (satt av klubben i adminpanelet), eller null for ingen egen grense – se lib/settings/recurringLimit.ts. */
+  recurringCutoffDate: string | null;
+}
+
+export default function BookingCalendar({ recurringCutoffDate }: BookingCalendarProps) {
   const today = useMemo(() => todayInClubTimeZone(), []);
   const maxDate = useMemo(() => maxBookableDate(), []);
 
@@ -141,9 +146,6 @@ export default function BookingCalendar() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const submitButtonRef = useRef<HTMLButtonElement | null>(null);
-  const wasMembershipConfirmed = useRef(false);
-
   // Husk navn/telefon i nettleseren fortløpende mens man skriver, slik at
   // neste besøk (eller neste booking rett etter) har feltene forhåndsutfylt.
   useEffect(() => {
@@ -152,16 +154,6 @@ export default function BookingCalendar() {
   useEffect(() => {
     writeRemembered(REMEMBERED_PHONE_KEY, phone);
   }, [phone]);
-
-  // Når man nettopp har hakt AV medlemskapsboksen (fra ukrysset til krysset
-  // av) – skroll ned slik at Vipps-knappen kommer i bildet, i stedet for at
-  // man selv må scrolle forbi resten av formen for å finne den.
-  useEffect(() => {
-    if (membershipConfirmed && !wasMembershipConfirmed.current) {
-      submitButtonRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-    wasMembershipConfirmed.current = membershipConfirmed;
-  }, [membershipConfirmed]);
 
   // Oppdateres jevnlig slik at tidspunkter som akkurat passerte "nå" forsvinner
   // fra rutenettet uten at brukeren må laste siden på nytt.
@@ -323,7 +315,12 @@ export default function BookingCalendar() {
       <div className={styles.card}>
         <div className={styles.dateRow}>
           <span className={styles.dateRowLabel}>{recurring ? "Første dato:" : "Velg dato:"}</span>
-          <DatePicker value={date} onChange={setDate} minDate={today} maxDate={recurring ? undefined : maxDate} />
+          <DatePicker
+            value={date}
+            onChange={setDate}
+            minDate={today}
+            maxDate={recurring ? (recurringCutoffDate ?? undefined) : maxDate}
+          />
         </div>
 
         {loadingSlots && <p className={styles.emptyState}>Henter ledige tider …</p>}
@@ -406,24 +403,13 @@ export default function BookingCalendar() {
       </div>
 
       {selectedLabel && (
-        <form className={`${styles.card} ${styles.form}`} onSubmit={handleSubmit}>
+        <form id="booking-form" className={`${styles.card} ${styles.form}`} onSubmit={handleSubmit}>
           <div className={styles.formRow}>
             <label>Du booker</label>
             <p className={styles.subtitleText}>
               {formatOslo(date, "EEEE d. MMMM")}, kl. {selectedLabel}
               {bookingEndLabel ? `–${bookingEndLabel}` : ""} ({formatDurationMinutes(BOOKING_DURATION_MINUTES)})
             </p>
-          </div>
-
-          <div className={styles.formRow}>
-            <label className={styles.membershipConfirm}>
-              <input
-                type="checkbox"
-                checked={membershipConfirmed}
-                onChange={(e) => setMembershipConfirmed(e.target.checked)}
-              />
-              Jeg bekrefter at jeg har tilgang til banen gjennom medlemskap i Skiens Grane Squash eller Mova Skien.
-            </label>
           </div>
 
           <div className={styles.formRow}>
@@ -502,16 +488,57 @@ export default function BookingCalendar() {
           </div>
 
           {errorMessage && <p className={styles.error}>{errorMessage}</p>}
-
-          <button
-            ref={submitButtonRef}
-            type="submit"
-            className={styles.submitButton}
-            disabled={submitting || !canSubmit}
-          >
-            {submitting ? "Starter Vipps …" : `Betal ${formatPriceOre(totalPrice)} med Vipps`}
-          </button>
         </form>
+      )}
+
+      {/*
+       * Medlemskapsbekreftelse og selve Vipps-knappen ligger i en egen,
+       * fast boks (ikke inni <form> i DOM-treet) slik at den kan stå synlig
+       * nederst i vinduet uansett hvor langt man har scrollet i resten av
+       * skjemaet over – siden bak er fortsatt fullt scrollbar og klikkbar,
+       * boksen legger seg bare oppå. Selve betalingen trigges likevel som en
+       * ordentlig form-innsending via "form"-attributtet på knappen under,
+       * som kobler den til <form id="booking-form"> uten at den må være et
+       * barn av den i markup. På smale skjermer er boksen en full-bredde
+       * linje nederst, på brede skjermer et lite flytende kort nede til
+       * høyre – se .floatingBar / media query i booking.module.css.
+       */}
+      {selectedLabel && (
+        <>
+          <div className={styles.floatingBar}>
+            <div className={styles.floatingBarSummary}>
+              <span className={styles.floatingBarPrice}>{formatPriceOre(totalPrice)}</span>
+              <span className={styles.floatingBarMeta}>
+                {formatOslo(date, "EEE d. MMM")}, kl. {selectedLabel}
+                {bookingEndLabel ? `–${bookingEndLabel}` : ""}
+              </span>
+            </div>
+
+            <label className={styles.floatingBarMembership}>
+              <input
+                type="checkbox"
+                checked={membershipConfirmed}
+                onChange={(e) => setMembershipConfirmed(e.target.checked)}
+              />
+              Jeg bekrefter at jeg har tilgang til banen gjennom medlemskap i Skiens Grane Squash eller Mova Skien.
+            </label>
+
+            <button type="submit" form="booking-form" className={styles.vippsButton} disabled={submitting || !canSubmit}>
+              {submitting ? (
+                "Starter Vipps …"
+              ) : (
+                <>
+                  Betal {formatPriceOre(totalPrice)} med
+                  <img src="/vipps-logo.webp" alt="Vipps" className={styles.vippsLogo} />
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Gir plass nederst slik at den faste boksen ikke dekker det
+              siste innholdet i formen permanent når man scroller helt ned. */}
+          <div className={styles.floatingBarSpacer} aria-hidden="true" />
+        </>
       )}
 
       {!selectedLabel && errorMessage && (
