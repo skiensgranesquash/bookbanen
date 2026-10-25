@@ -155,6 +155,35 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
   // har skrevet inn.
   const userEditedNameRef = useRef(false);
 
+  // Sann mens navn- eller telefonfeltet har fokus – da dytter det mobile
+  // tastaturet seg opp fra bunnen, og den faste boksen (som også ligger i
+  // bunnen av det synlige vinduet) ville ellers lagt seg oppå det i stedet
+  // for bak. Se .floatingBarHidden i booking.module.css. Et lite tidsavbrudd
+  // på selve "skjul igjen"-delen (ikke på "vis igjen") hindrer at boksen
+  // blinker til synlig for et øyeblikk når man hopper rett fra navnefeltet
+  // til telefonfeltet (blur på det ene rekker å skje før fokus på det neste).
+  const [contactFieldFocused, setContactFieldFocused] = useState(false);
+  const contactBlurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleContactFieldFocus() {
+    if (contactBlurTimeoutRef.current) {
+      clearTimeout(contactBlurTimeoutRef.current);
+      contactBlurTimeoutRef.current = null;
+    }
+    setContactFieldFocused(true);
+  }
+
+  function handleContactFieldBlur() {
+    if (contactBlurTimeoutRef.current) clearTimeout(contactBlurTimeoutRef.current);
+    contactBlurTimeoutRef.current = setTimeout(() => setContactFieldFocused(false), 80);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (contactBlurTimeoutRef.current) clearTimeout(contactBlurTimeoutRef.current);
+    };
+  }, []);
+
   // Husk navn/telefon i nettleseren fortløpende mens man skriver, slik at
   // neste besøk (eller neste booking rett etter) har feltene forhåndsutfylt.
   useEffect(() => {
@@ -528,6 +557,8 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
                 userEditedNameRef.current = true;
                 setName(e.target.value);
               }}
+              onFocus={handleContactFieldFocus}
+              onBlur={handleContactFieldBlur}
               autoComplete="name"
             />
           </div>
@@ -541,6 +572,8 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
               required
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              onFocus={handleContactFieldFocus}
+              onBlur={handleContactFieldBlur}
               autoComplete="tel"
             />
             <p className={styles.subtitleText}>
@@ -566,7 +599,9 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
        */}
       {selectedLabel && (
         <>
-          <div className={styles.floatingBar}>
+          <div
+            className={`${styles.floatingBar} ${contactFieldFocused ? styles.floatingBarHidden : ""}`}
+          >
             <div className={styles.floatingBarSummary}>
               <span className={styles.floatingBarPrice}>{formatPriceOre(totalPrice)}</span>
               <span className={styles.floatingBarMeta}>

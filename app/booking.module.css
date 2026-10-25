@@ -518,6 +518,23 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  transform: translateY(0);
+  transition: transform 0.2s ease;
+}
+
+/*
+ * Mens man skriver i navn/telefon-feltet dukker det mobile tastaturet opp
+ * nederst på skjermen – siden boksen ligger med position: fixed i BUNNEN av
+ * det synlige vinduet (ikke bunnen av selve siden), havner den da oppå
+ * tastaturet i stedet for bak det. Løsningen er å skyve boksen rett ned og
+ * ut av syne mens et av disse feltene har fokus (se contactFieldFocused i
+ * BookingCalendar.tsx) – den kommer tilbake med en gang feltet mister fokus
+ * igjen. Kun et mobil-problem (ekte tastatur dekker skjermen), så dette
+ * nullstilles for det flytende kortet på brede skjermer under.
+ */
+.floatingBarHidden {
+  transform: translateY(130%);
+  pointer-events: none;
 }
 
 .floatingBarSummary {
@@ -615,5 +632,12 @@
 
   .floatingBarSpacer {
     height: 40px;
+  }
+
+  /* Ingen virtuelt tastatur dekker skjermen på desktop, og kortet ligger
+     uansett i hjørnet, ikke over feltene – behold det synlig. */
+  .floatingBarHidden {
+    transform: translateY(0);
+    pointer-events: auto;
   }
 }
