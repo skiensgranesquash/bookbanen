@@ -384,6 +384,14 @@ export const localRepository: BookingRepository = {
     });
   },
 
+  async findCustomerNameByPhone(phone) {
+    const db = await loadDb();
+    const matches = db.bookingGroups
+      .filter((g) => g.kind !== "block" && g.customerPhone === phone)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return matches[0]?.customerName ?? null;
+  },
+
   async getAdminByEmail(email) {
     const db = await loadDb();
     const user = db.adminUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());

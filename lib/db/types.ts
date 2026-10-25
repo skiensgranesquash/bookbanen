@@ -203,6 +203,17 @@ export interface BookingRepository {
     patch: { customerName?: string; customerPhone?: string; range?: TimeRange }
   ): Promise<CreateResult>;
 
+  /**
+   * Finner navnet brukt sist gang NOEN booket med dette mobilnummeret (på
+   * tvers av nettlesere/enheter – i motsetning til navn/telefon som huskes
+   * lokalt i brukerens egen nettleser via localStorage, se
+   * REMEMBERED_NAME_KEY i app/BookingCalendar.tsx), slik at navnefeltet kan
+   * fylles ut automatisk når man skriver inn et kjent nummer fra en helt ny
+   * nettleser. Returnerer null hvis nummeret ikke finnes fra før.
+   * Blokkeringer (kind "block") har ikke noe ekte kundenavn og ekskluderes.
+   */
+  findCustomerNameByPhone(phone: string): Promise<string | null>;
+
   getAdminByEmail(email: string): Promise<AdminUser | null>;
   createAdminUser(input: {
     email: string;

@@ -398,6 +398,21 @@ export const supabaseRepository: BookingRepository = {
     return { ok: true, group: updated };
   },
 
+  async findCustomerNameByPhone(phone) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from("booking_groups")
+      .select("customer_name")
+      .eq("customer_phone", phone)
+      .neq("kind", "block")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw new Error(`Kunne ikke slå opp kundenavn: ${error.message}`);
+    return (data as { customer_name: string } | null)?.customer_name ?? null;
+  },
+
   async getAdminByEmail(email) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase

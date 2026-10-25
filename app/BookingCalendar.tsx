@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import styles from "./booking.module.css";
 import DatePicker from "./DatePicker";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/lib/config";
 import { maxBookableDate, todayInClubTimeZone } from "@/lib/slots";
 import { formatDurationMinutes, formatOslo, formatPriceOre } from "@/lib/formatting";
+import { normalizeNorwegianMobile } from "@/lib/phone";
 import { useSlotMerging, type SlotVisualState } from "@/lib/useSlotMerging";
 
 interface AvailabilitySlot {
@@ -146,6 +147,14 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const phoneInputRef = useRef<HTMLInputElement | null>(null);
+  // Blir true i det øyeblikket brukeren selv skriver noe i navnefeltet – da
+  // skal IKKE telefonoppslaget under (eller den opprinnelige lokale
+  // forhåndsutfyllingen) lenger få lov til å overskrive det brukeren selv
+  // har skrevet inn.
+  const userEditedNameRef = useRef(false);
+
   // Husk navn/telefon i nettleseren fortløpende mens man skriver, slik at
   // neste besøk (eller neste booking rett etter) har feltene forhåndsutfylt.
   useEffect(() => {
@@ -153,6 +162,33 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
   }, [name]);
   useEffect(() => {
     writeRemembered(REMEMBERED_PHONE_KEY, phone);
+  }, [phone]);
+
+  // Gjenkjenner et mobilnummer som har blitt brukt i en TIDLIGERE booking –
+  // også fra en helt annen nettleser/enhet enn den som huskes lokalt over –
+  // og fyller inn navnet som ble brukt sist med akkurat dette nummeret. Kun
+  // mens brukeren ikke selv har redigert navnefeltet (se userEditedNameRef),
+  // slik at vi aldri overskriver noe brukeren bevisst har skrevet inn selv.
+  useEffect(() => {
+    const normalizedPhone = normalizeNorwegianMobile(phone);
+    if (!normalizedPhone || userEditedNameRef.current) return;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      fetch(`/api/squash/customer-lookup?phone=${normalizedPhone}`, { signal: controller.signal })
+        .then((res) => res.json() as Promise<{ name: string | null }>)
+        .then((data) => {
+          if (data.name && !userEditedNameRef.current) setName(data.name);
+        })
+        .catch(() => {
+          // Stillegående – dette er kun en bekvemmelighet, aldri kritisk.
+        });
+    }, 400);
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [phone]);
 
   // Oppdateres jevnlig slik at tidspunkter som akkurat passerte "nå" forsvinner
@@ -262,7 +298,24 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!selectedLabel) return;
+    if (!membershipConfirmed) return;
     if (recurring && preview && !preview.allAvailable) return;
+
+    // Navn/telefon er IKKE en del av det Vipps-knappen krever for å være
+    // klikkbar (se canStartPayment under) – i stedet fører et trykk på
+    // knappen hit rett til feltet som mangler, i stedet for å gjøre ingenting.
+    // Dette er nødvendig nå som knappen ligger i en fast boks og ikke lenger
+    // rett ved siden av navn/telefon-feltene i skjemaet over.
+    if (name.trim().length < 2) {
+      nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      nameInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (phone.trim().length === 0) {
+      phoneInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      phoneInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
 
     setSubmitting(true);
     setErrorMessage(null);
@@ -303,12 +356,12 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
   const occurrenceCount = recurring ? weeks : 1;
   const totalPrice =
     recurring && preview ? preview.totalAmountOre : PRICE_PER_SLOT_ORE * BOOKING_DURATION_SLOTS * occurrenceCount;
-  const canSubmit =
-    !!selectedLabel &&
-    membershipConfirmed &&
-    name.trim().length >= 2 &&
-    phone.trim().length > 0 &&
-    (!recurring || preview?.allAvailable);
+  // Navn/telefon er BEVISST ikke med her – knappen skal forbli klikkbar selv
+  // om de mangler, slik at et trykk på den tar deg til feltet som mangler
+  // (se handleSubmit) i stedet for å virke "død". Medlemskap er fortsatt et
+  // hardt krav siden det er en bekreftelse brukeren selv må ha krysset av.
+  const canStartPayment =
+    !!selectedLabel && membershipConfirmed && (!recurring || preview?.allAvailable);
 
   return (
     <>
@@ -464,13 +517,17 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
           <div className={styles.formRow}>
             <label htmlFor="booking-name">Navn</label>
             <input
+              ref={nameInputRef}
               id="booking-name"
               type="text"
               required
               minLength={2}
               maxLength={100}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                userEditedNameRef.current = true;
+                setName(e.target.value);
+              }}
               autoComplete="name"
             />
           </div>
@@ -478,6 +535,7 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
           <div className={styles.formRow}>
             <label htmlFor="booking-phone">Mobilnummer (Vipps)</label>
             <input
+              ref={phoneInputRef}
               id="booking-phone"
               type="tel"
               required
@@ -485,6 +543,9 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
               onChange={(e) => setPhone(e.target.value)}
               autoComplete="tel"
             />
+            <p className={styles.subtitleText}>
+              Har du booket før, gjenkjenner vi nummeret og fyller ut navnet for deg.
+            </p>
           </div>
 
           {errorMessage && <p className={styles.error}>{errorMessage}</p>}
@@ -523,7 +584,12 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
               Jeg bekrefter at jeg har tilgang til banen gjennom medlemskap i Skiens Grane Squash eller Mova Skien.
             </label>
 
-            <button type="submit" form="booking-form" className={styles.vippsButton} disabled={submitting || !canSubmit}>
+            <button
+              type="submit"
+              form="booking-form"
+              className={styles.vippsButton}
+              disabled={submitting || !canStartPayment}
+            >
               {submitting ? (
                 "Starter Vipps …"
               ) : (
