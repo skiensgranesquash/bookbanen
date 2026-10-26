@@ -558,6 +558,83 @@ export default function BookingCalendar({ recurringCutoffDate, price30MinOre, pr
               </div>
             )}
 
+            {/*
+             * Gjentakende booking hører tematisk sammen med selve
+             * tid/varighet-valget over (det er jo DETTE tidspunktet/denne
+             * varigheten som eventuelt skal gjentas) – ikke med navn/telefon
+             * lenger nede, som er helt uavhengig av om bookingen gjentas
+             * eller ikke. Vises derfor i SAMME boks som varighetsvelgeren,
+             * rett etter at varighet er valgt (varighetsvelgeren over
+             * forsvinner idet duration settes, så denne tar visuelt over
+             * plassen i boksen).
+             */}
+            {selectedLabel && duration !== null && (
+              <div className={styles.durationPicker}>
+                <label className={styles.checkboxOption}>
+                  <input
+                    type="checkbox"
+                    checked={recurring}
+                    disabled={!recurringAllowed}
+                    onChange={(e) => setRecurring(e.target.checked)}
+                  />
+                  Gjenta samme ukedag/klokkeslett hver uke
+                </label>
+                {!recurringAllowed && recurringCutoffDate && (
+                  <p className={styles.subtitleText}>
+                    Gjentakende booking er ikke mulig fra denne datoen – den er etter siste dato for gjentakende
+                    bookinger ({formatOslo(recurringCutoffDate, "d. MMM yyyy")}).
+                  </p>
+                )}
+
+                {recurring && (
+                  <div className={styles.formRow} style={{ marginTop: 10 }}>
+                    <label htmlFor="booking-weeks">Antall uker (inkl. denne)</label>
+                    <input
+                      id="booking-weeks"
+                      type="number"
+                      min={1}
+                      max={maxWeeksAllowed}
+                      value={weeks}
+                      onChange={(e) => setWeeks(Math.max(1, Math.min(maxWeeksAllowed, Number(e.target.value) || 1)))}
+                    />
+                    {recurringCutoffDate && maxWeeksAllowed < MAX_RECURRING_WEEKS && (
+                      <p className={styles.subtitleText}>
+                        Du kan maks booke {maxWeeksAllowed} {maxWeeksAllowed === 1 ? "uke" : "uker"} fra denne datoen –
+                        det er ikke mulig å booke etter {formatOslo(recurringCutoffDate, "d. MMM yyyy")} (siste dato
+                        for gjentakende bookinger, satt av klubben).
+                      </p>
+                    )}
+
+                    {loadingPreview && <p className={styles.emptyState}>Sjekker ledighet for alle ukene …</p>}
+
+                    {!loadingPreview && preview && (
+                      <div className={styles.previewList}>
+                        {preview.occurrences.map((o) => (
+                          <div
+                            key={o.startTime}
+                            className={o.available ? styles.previewRowOk : styles.previewRowConflict}
+                          >
+                            {formatOslo(o.startTime, "EEEE d. MMM")}
+                            {" – "}
+                            {o.available
+                              ? "ledig"
+                              : o.reason === "closed"
+                                ? `stengt${o.note ? ` (${o.note})` : ""}`
+                                : "opptatt"}
+                          </div>
+                        ))}
+                        {!preview.allAvailable && (
+                          <p className={styles.error}>
+                            Én eller flere uker er opptatt eller stengt – juster antall uker eller klokkeslett.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <p className={styles.subtitleText}>
               Trykk på et ledig klokkeslett og velg om du vil booke 30 minutter eller 1 time. Grønt er ledig, rødt er
               fysisk opptatt (sammenhengende opptatte halvtimer flyter sammen til én blokk).
@@ -575,68 +652,6 @@ export default function BookingCalendar({ recurringCutoffDate, price30MinOre, pr
               {bookingEndLabel ? `–${bookingEndLabel}` : ""} ({formatDurationMinutes(duration)})
             </p>
           </div>
-
-          <div className={styles.formRow}>
-            <label className={styles.checkboxOption}>
-              <input
-                type="checkbox"
-                checked={recurring}
-                disabled={!recurringAllowed}
-                onChange={(e) => setRecurring(e.target.checked)}
-              />
-              Gjenta samme ukedag/klokkeslett hver uke
-            </label>
-            {!recurringAllowed && recurringCutoffDate && (
-              <p className={styles.subtitleText}>
-                Gjentakende booking er ikke mulig fra denne datoen – den er etter siste dato for gjentakende
-                bookinger ({formatOslo(recurringCutoffDate, "d. MMM yyyy")}).
-              </p>
-            )}
-          </div>
-
-          {recurring && (
-            <div className={styles.formRow}>
-              <label htmlFor="booking-weeks">Antall uker (inkl. denne)</label>
-              <input
-                id="booking-weeks"
-                type="number"
-                min={1}
-                max={maxWeeksAllowed}
-                value={weeks}
-                onChange={(e) => setWeeks(Math.max(1, Math.min(maxWeeksAllowed, Number(e.target.value) || 1)))}
-              />
-              {recurringCutoffDate && maxWeeksAllowed < MAX_RECURRING_WEEKS && (
-                <p className={styles.subtitleText}>
-                  Du kan maks booke {maxWeeksAllowed} {maxWeeksAllowed === 1 ? "uke" : "uker"} fra denne datoen – det
-                  er ikke mulig å booke etter {formatOslo(recurringCutoffDate, "d. MMM yyyy")} (siste dato for
-                  gjentakende bookinger, satt av klubben).
-                </p>
-              )}
-
-              {loadingPreview && <p className={styles.emptyState}>Sjekker ledighet for alle ukene …</p>}
-
-              {!loadingPreview && preview && (
-                <div className={styles.previewList}>
-                  {preview.occurrences.map((o) => (
-                    <div key={o.startTime} className={o.available ? styles.previewRowOk : styles.previewRowConflict}>
-                      {formatOslo(o.startTime, "EEEE d. MMM")}
-                      {" – "}
-                      {o.available
-                        ? "ledig"
-                        : o.reason === "closed"
-                          ? `stengt${o.note ? ` (${o.note})` : ""}`
-                          : "opptatt"}
-                    </div>
-                  ))}
-                  {!preview.allAvailable && (
-                    <p className={styles.error}>
-                      Én eller flere uker er opptatt eller stengt – juster antall uker eller klokkeslett.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
           <div className={styles.summary}>
             {recurring ? `${occurrenceCount} økter à` : "Totalt"} {formatPriceOre(priceForSelectedDuration)}
