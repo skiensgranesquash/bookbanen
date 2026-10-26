@@ -203,7 +203,7 @@ export default function VippsSettingsForm() {
         )}
       </div>
 
-      <div className={styles.threeColRow}>
+      <div className={styles.vippsStepsRow}>
       <div className={styles.card}>
         <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>1. Sett Vipps-nøkler</h2>
         <p className={styles.bookingMeta}>
@@ -261,6 +261,7 @@ export default function VippsSettingsForm() {
         </form>
       </div>
 
+      <div className={styles.vippsStepsStack}>
       <div className={styles.card}>
         <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>2. Test tilkoblingen</h2>
         <p className={styles.bookingMeta}>Henter et ekte access-token fra Vipps med nøklene som er lagret over, uten å røre noen betalinger.</p>
@@ -320,6 +321,7 @@ export default function VippsSettingsForm() {
             {activateMessage.text}
           </p>
         )}
+      </div>
       </div>
       </div>
         </div>

@@ -1182,6 +1182,36 @@
   }
 }
 
+/* ---- Vipps-oppsett: steg 1 (lang boks) til venstre, steg 2-4 (tre sma
+   bokser) stablet under hverandre til hoyre - flytter seg under steg 1 pa
+   smale skjermer, akkurat som de andre side-om-side-layoutene over. ---- */
+
+.vippsStepsRow {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.vippsStepsRow > .card {
+  flex: 1 1 320px;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.vippsStepsStack {
+  flex: 1 1 280px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.vippsStepsStack > .card {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
 /* ---- Oversikt: "book uten betaling"-modal (åpnes med "+" i en dag-rute) ---- */
 
 .modalOverlay {
