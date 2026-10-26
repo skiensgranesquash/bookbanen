@@ -8,12 +8,15 @@ import { SESSION_COOKIE_NAME, verifySessionCookieValue } from "@/lib/auth/sessio
  *
  * I tillegg: en "bookings_only"-administrator (begrenset admin, se AdminRole
  * i lib/db/types.ts) får kun tilgang til Bookinger-fanen (siden "/admin" –
- * selve Oversikt-siden med kalender/avtaler/blokkering) og "/admin/account"
- * (for å kunne bytte sitt eget passord) – se listene lenger ned. ALT annet
- * (Åpningstider, Utseende, Innstillinger/Vipps, OG "/api/admin/account/users"
- * som oppretter/lister admin-brukere) er stengt for denne rollen, slik at en
- * begrenset administrator aldri kan gi seg selv – eller noen andre – flere
- * rettigheter enn det en full administrator opprinnelig satte dem opp med.
+ * selve Oversikt-siden med kalender/avtaler/blokkering) – se listene lenger
+ * ned. Bytte av eget passord skjer via profilmenyen øverst til høyre (synlig
+ * på alle sider denne rollen får åpne) og går mot "/api/admin/account/password",
+ * som er tillatt uavhengig av "/admin/account" (se BOOKINGS_ONLY_ALLOWED_API_EXACT
+ * under). ALT annet (Oppsett, Utseende, Vipps, "/admin/account" OG
+ * "/api/admin/account/users" som oppretter/lister admin-brukere) er stengt
+ * for denne rollen, slik at en begrenset administrator aldri kan gi seg selv
+ * – eller noen andre – flere rettigheter enn det en full administrator
+ * opprinnelig satte dem opp med.
  * Dette håndheves her, ETT sted, i stedet for i hver enkelt rute, akkurat som
  * selve innloggingssjekken allerede gjør – og siden rollen ligger signert i
  * selve sesjonscookien (se session.ts), trengs ingen ekstra databaseoppslag
@@ -32,7 +35,7 @@ import { SESSION_COOKIE_NAME, verifySessionCookieValue } from "@/lib/auth/sessio
  */
 
 /** Sider en "bookings_only"-administrator får åpne (nøyaktig disse – ikke prefiks, siden f.eks. "/admin/opening-hours" ellers ville matchet "/admin"). */
-const BOOKINGS_ONLY_ALLOWED_PAGES = new Set(["/admin", "/admin/account"]);
+const BOOKINGS_ONLY_ALLOWED_PAGES = new Set(["/admin"]);
 
 /** API-endepunkt en "bookings_only"-administrator får kalle – nøyaktige stier, eller prefikser der ruten har undersider ([id], manual, osv.). */
 const BOOKINGS_ONLY_ALLOWED_API_EXACT = new Set([

@@ -427,9 +427,12 @@ export default function OpeningHoursManager() {
       <AdminNav active="apningstider" />
       <main className={styles.page}>
         <div className={styles.tabPanel}>
-          <h1 className={styles.title}>Åpningstider</h1>
-          <p className={styles.subtitle}>Standard åpningstider per ukedag, pluss ferier og andre annerledesdager.</p>
+          <h1 className={styles.title}>Oppsett</h1>
+          <p className={styles.subtitle}>
+            Priser, grense for gjentakende bookinger, ukentlige åpningstider og ferier/annerledesdager.
+          </p>
 
+      <div className={styles.settingsGrid}>
       <div className={styles.card}>
         <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Pris</h2>
         <p className={styles.bookingMeta}>
@@ -511,12 +514,13 @@ export default function OpeningHoursManager() {
           </form>
         )}
       </div>
+      </div>
 
       {loading && <p>Laster …</p>}
       {loadError && <p className={styles.error}>{loadError}</p>}
 
       {!loading && weekly && (
-        <>
+        <div className={styles.settingsGrid}>
           <div className={styles.card}>
             <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Ukentlige åpningstider</h2>
             <p className={styles.bookingMeta}>
@@ -732,7 +736,7 @@ export default function OpeningHoursManager() {
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
         </div>
       </main>

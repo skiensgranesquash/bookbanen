@@ -169,7 +169,7 @@ export default function VippsSettingsForm() {
       <AdminNav active="vipps" />
       <main className={styles.page}>
         <div className={styles.tabPanel}>
-          <h1 className={styles.title}>Innstillinger – Vipps</h1>
+          <h1 className={styles.title}>Vipps</h1>
           <p className={styles.subtitle}>Sett opp betaling direkte her, uten å røre kode eller miljøvariabler.</p>
 
       <div className={styles.card}>

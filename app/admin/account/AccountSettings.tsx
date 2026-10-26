@@ -21,13 +21,6 @@ interface AdminUserRow {
 }
 
 export default function AccountSettings() {
-  // --- Bytt passord ---
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [passwordMessage, setPasswordMessage] = useState<{ ok: boolean; text: string } | null>(null);
-
   // --- Egen rolle (styrer om "Admin-brukere"-kortet under vises i det hele
   // tatt – en begrenset administrator skal verken se listen over andre
   // administratorer eller kunne opprette flere, se middleware.ts for den
@@ -75,40 +68,6 @@ export default function AccountSettings() {
       });
   }, []);
 
-  async function handleChangePassword(e: FormEvent) {
-    e.preventDefault();
-    setPasswordMessage(null);
-
-    if (newPassword !== confirmPassword) {
-      setPasswordMessage({ ok: false, text: "De to nye passordene er ikke like." });
-      return;
-    }
-
-    setChangingPassword(true);
-    try {
-      const res = await fetch("/api/admin/account/password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = (await res.json()) as { error?: string };
-
-      if (!res.ok) {
-        setPasswordMessage({ ok: false, text: data.error ?? "Kunne ikke bytte passord." });
-        return;
-      }
-
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setPasswordMessage({ ok: true, text: "Passordet er byttet." });
-    } catch {
-      setPasswordMessage({ ok: false, text: "Kunne ikke bytte passord akkurat nå." });
-    } finally {
-      setChangingPassword(false);
-    }
-  }
-
   async function handleCreateUser(e: FormEvent) {
     e.preventDefault();
     setCreateMessage(null);
@@ -151,57 +110,10 @@ export default function AccountSettings() {
       <AdminNav active="konto" />
       <main className={styles.page}>
         <div className={styles.tabPanel}>
-          <h1 className={styles.title}>Min konto</h1>
-          <p className={styles.subtitle}>Bytt eget passord, eller gi flere personer tilgang til adminpanelet.</p>
-
-      <div className={styles.card}>
-        <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Bytt passord</h2>
-        <form onSubmit={handleChangePassword} className={styles.form}>
-          <div className={styles.formRow}>
-            <label htmlFor="current-password">Nåværende passord</label>
-            <input
-              id="current-password"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-            />
-          </div>
-          <div className={styles.formRow}>
-            <label htmlFor="new-password">Nytt passord</label>
-            <input
-              id="new-password"
-              type="password"
-              required
-              minLength={8}
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
-          </div>
-          <div className={styles.formRow}>
-            <label htmlFor="confirm-password">Gjenta nytt passord</label>
-            <input
-              id="confirm-password"
-              type="password"
-              required
-              minLength={8}
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-            />
-          </div>
-
-          {passwordMessage && (
-            <p className={passwordMessage.ok ? styles.success : styles.error}>{passwordMessage.text}</p>
-          )}
-
-          <button type="submit" className={styles.submitButton} disabled={changingPassword}>
-            {changingPassword ? "Bytter …" : "Bytt passord"}
-          </button>
-        </form>
-      </div>
+          <h1 className={styles.title}>Administratorer</h1>
+          <p className={styles.subtitle}>
+            Gi flere personer tilgang til adminpanelet. Eget passord bytter du via navnet ditt øverst til høyre.
+          </p>
 
       {ownRole === "full" && (
         <div className={styles.card}>
