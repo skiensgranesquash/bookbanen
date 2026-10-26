@@ -7,6 +7,17 @@ import { getBranding } from "@/lib/settings/branding";
 import { getPricingSettings } from "@/lib/settings/pricing";
 import { getRecurringCutoffDate } from "@/lib/settings/recurringLimit";
 
+// Uten denne blir siden statisk forhåndsrenderet ved BUILD-tidspunktet (Next.js
+// ser ingen "dynamisk" API-bruk her, bare rene databaseoppslag) – da fryses
+// branding/priser/grense for gjentakende bookinger til akkurat de verdiene de
+// hadde DA man sist kjørte "npm run build", og endringer i adminpanelet
+// (f.eks. en ny grensedato) vises ikke på selve bookingsiden før NESTE
+// deploy, selv om API-rutene (som alle har denne samme linjen) uansett
+// håndhever den ferske verdien korrekt. Se feilen dette forårsaket: "antall
+// uker"-feltet ble aldri begrenset av en nylig satt grensedato, siden
+// `recurringCutoffDate` kom fra den gamle, cachede siden.
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(): Promise<Metadata> {
   const { clubName } = await getBranding();
   return {

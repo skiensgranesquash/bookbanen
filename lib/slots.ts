@@ -204,3 +204,32 @@ export function generateWeeklyDates(firstDate: string, weeks: number): string[] 
 
   return dates;
 }
+
+/**
+ * Hvor mange uker en gjentakende rekke MAKS kan ha fra og med `firstDate`
+ * (inkludert den første forekomsten), uten at noen forekomst havner etter
+ * klubbens egen grense for gjentakende bookinger (`cutoffDate` – se
+ * lib/settings/recurringLimit.ts; `null` betyr ingen egen grense, og da er
+ * det bare MAX_RECURRING_WEEKS som gjelder).
+ *
+ * Brukes til å begrense selve "antall uker"-feltet i UI-et (se
+ * BookingCalendar.tsx) FØR brukeren betaler, i stedet for å oppdage for sent
+ * (etter betaling) at rekken ble kuttet fordi noen av ukene lå forbi grensen
+ * – se POST /api/squash/bookings, som uansett også håndhever dette på nytt,
+ * atomisk, ved selve opprettelsen.
+ *
+ * Samme rene UTC-millisekund-aritmetikk som generateWeeklyDates over, av
+ * samme grunn (tidssone-uavhengig datoregning).
+ */
+export function maxRecurringWeeksUntil(firstDate: string, cutoffDate: string | null): number {
+  if (!cutoffDate) return MAX_RECURRING_WEEKS;
+
+  const [fy, fm, fd] = firstDate.split("-").map(Number);
+  const [cy, cm, cd] = cutoffDate.split("-").map(Number);
+  const firstMs = Date.UTC(fy, fm - 1, fd);
+  const cutoffMs = Date.UTC(cy, cm - 1, cd);
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+  const weeksUntilCutoff = Math.floor((cutoffMs - firstMs) / WEEK_MS) + 1;
+  return Math.max(0, Math.min(MAX_RECURRING_WEEKS, weeksUntilCutoff));
+}
