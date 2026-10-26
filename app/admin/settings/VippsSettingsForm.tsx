@@ -203,6 +203,7 @@ export default function VippsSettingsForm() {
         )}
       </div>
 
+      <div className={styles.threeColRow}>
       <div className={styles.card}>
         <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>1. Sett Vipps-nøkler</h2>
         <p className={styles.bookingMeta}>
@@ -319,6 +320,7 @@ export default function VippsSettingsForm() {
             {activateMessage.text}
           </p>
         )}
+      </div>
       </div>
         </div>
       </main>

@@ -1,7 +1,37 @@
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
-export const metadata = {
+/**
+ * Ikoner for "Legg til på hjemskjermen" (iOS Safari/Chrome/Firefox – alle tre
+ * bruker WebKit på iOS og leser apple-touch-icon, mens Android Chrome/Firefox
+ * primært bruker web-manifestets icons-liste). Generert FRA klubbens egen
+ * standardlogo (public/logo-squash.JPG) i tre faste størrelser – se
+ * public/manifest.json for selve manifestet. Disse er statiske filer, IKKE
+ * hentet live fra adminpanelets "Utseende"-innstilling (lib/settings/branding.ts)
+ * slik logoet på selve bookingsiden er – om klubben laster opp en ny logo i
+ * adminpanelet senere, må disse tre ikonfilene (public/icon-192.png,
+ * public/icon-512.png, public/apple-touch-icon.png) genereres på nytt for at
+ * hjemskjerm-ikonet skal følge med (spør utvikleren/Claude om dette).
+ */
+export const metadata: Metadata = {
   title: "IF Skiens Grane – Squashbooking",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Squashbooking",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0046b3",
 };
 
 /**
