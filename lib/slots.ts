@@ -1,6 +1,6 @@
 import { addDays, addMinutes } from "date-fns";
 import { format, fromZonedTime } from "date-fns-tz";
-import { BOOKING_DURATION_MINUTES, MAX_DAYS_AHEAD, MAX_RECURRING_WEEKS, SLOT_LENGTH_MINUTES, TIME_ZONE } from "./config";
+import { MAX_DAYS_AHEAD, MAX_RECURRING_WEEKS, SLOT_LENGTH_MINUTES, TIME_ZONE } from "./config";
 
 export interface SlotDefinition {
   /** UTC-tidspunkt økten starter. */
@@ -61,18 +61,19 @@ export interface OpeningInterval {
  * de andre, så rutenettet får naturlig et "hull" der det ikke er åpent (ingen
  * booking kan starte slik at den ville krysset pausen mellom to tidsrom).
  *
- * Genererer KUN starttidspunkter der en hel BOOKING_DURATION_MINUTES-lang
- * økt faktisk får plass før tidsrommets stengetid – et siste starttidspunkt
- * som ikke rekker en hel time før stengetid (f.eks. 22:30 når det stenger
- * 23:00), vises aldri (ikke bare gråes ut).
+ * Genererer KUN starttidspunkter der en hel SLOT_LENGTH_MINUTES-lang
+ * tidsluke faktisk får plass før tidsrommets stengetid – et siste
+ * starttidspunkt som ikke rekker en hel halvtime før stengetid vises aldri
+ * (ikke bare gråes ut).
  *
- * VIKTIG: `endTime` på hver returnerte slot er start + HELE
- * BOOKING_DURATION_MINUTES (ikke bare SLOT_LENGTH_MINUTES) – altså nøyaktig
- * det tidsrommet en faktisk booking fra dette starttidspunktet ville dekket.
- * Det gjør at hver slot er selvstendig komplett for en konflikt-sjekk (se
- * app/api/squash/availability/route.ts): man trenger IKKE slå opp "neste"
- * slot i rutenettet for å avgjøre om en hel time er ledig fra dette
- * klokkeslettet – akkurat denne slottens `available`-flagg er nok i seg selv.
+ * VIKTIG: hver returnert slot er en REN, fysisk SLOT_LENGTH_MINUTES-lang
+ * tidsluke (`endTime` = start + SLOT_LENGTH_MINUTES, ALDRI lenger) – siden
+ * en booking nå kan være enten 30 minutter eller 1 time (se
+ * BOOKABLE_DURATIONS_MINUTES i lib/config.ts), kan ikke denne funksjonen
+ * lenger bake inn en fast varighet i selve rutenettet. Hvert "slot" her er
+ * dermed alltid den minste bookbare enheten; om en hel time faktisk kan
+ * starte her avgjøres av KALLEREN ved å se på om påfølgende tidsluke også er
+ * ledig (se `canExtendToHour` i app/api/squash/availability/route.ts).
  */
 export function generateSlotsForDate(dateStr: string, intervals: OpeningInterval[]): SlotDefinition[] {
   const slots: SlotDefinition[] = [];
@@ -83,14 +84,14 @@ export function generateSlotsForDate(dateStr: string, intervals: OpeningInterval
 
     for (
       let minuteOfDay = openMinutes;
-      minuteOfDay + BOOKING_DURATION_MINUTES <= closeMinutes;
+      minuteOfDay + SLOT_LENGTH_MINUTES <= closeMinutes;
       minuteOfDay += SLOT_LENGTH_MINUTES
     ) {
       const hh = pad(Math.floor(minuteOfDay / 60));
       const mm = pad(minuteOfDay % 60);
       const localTimeString = `${dateStr}T${hh}:${mm}:00`;
       const startTime = fromZonedTime(localTimeString, TIME_ZONE);
-      const endTime = addMinutes(startTime, BOOKING_DURATION_MINUTES);
+      const endTime = addMinutes(startTime, SLOT_LENGTH_MINUTES);
       slots.push({ startTime, endTime, label: `${hh}:${mm}` });
     }
   }
@@ -131,8 +132,8 @@ export function occurrenceRange(
 /**
  * Om et tidsrom (i lokal klubb-tidssone) holder seg innenfor åpningstidene
  * på sin egen dag. Økter krysser aldri midnatt i denne appen (hver økt er
- * nøyaktig BOOKING_DURATION_MINUTES lang), så vi kan trygt kreve at start og
- * slutt er på samme kalenderdag.
+ * høyst 1 time lang – se BOOKABLE_DURATIONS_MINUTES i lib/config.ts), så vi
+ * kan trygt kreve at start og slutt er på samme kalenderdag.
  *
  * `intervals` er den EFFEKTIVE åpningstiden for akkurat denne dagen (fra
  * lib/settings/openingHours.ts) – IKKE globale konstanter lenger, siden

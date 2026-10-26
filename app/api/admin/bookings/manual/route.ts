@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRepository } from "@/lib/db";
 import { isValidBookingDateString, isWithinOpeningHours, occurrenceRange } from "@/lib/slots";
 import { normalizeNorwegianMobile } from "@/lib/phone";
-import { BOOKING_DURATION_SLOTS, PRICE_PER_SLOT_ORE } from "@/lib/config";
+import { durationMinutesToSlots } from "@/lib/config";
 import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHours";
+import { getPricingSettings, priceForDuration } from "@/lib/settings/pricing";
 
 export const dynamic = "force-dynamic";
+
+/** Admins manuelle booking (uten betaling) er alltid nøyaktig 1 time – se kommentaren under. */
+const MANUAL_BOOKING_DURATION_SLOTS = durationMinutesToSlots(60);
 
 interface ManualBookingBody {
   date?: string;
@@ -60,7 +64,7 @@ export async function POST(request: NextRequest) {
     phone = normalized;
   }
 
-  const range = occurrenceRange(date, time, BOOKING_DURATION_SLOTS);
+  const range = occurrenceRange(date, time, MANUAL_BOOKING_DURATION_SLOTS);
   if (!range) {
     return NextResponse.json({ error: "Ugyldig klokkeslett." }, { status: 400 });
   }
@@ -73,11 +77,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const pricing = await getPricingSettings();
   const repo = await getRepository();
   const result = await repo.createAdminBooking({
     customerName: name,
     customerPhone: phone,
-    totalAmountOre: PRICE_PER_SLOT_ORE * BOOKING_DURATION_SLOTS,
+    totalAmountOre: priceForDuration(pricing, 60),
     range: { startTime: range.startTime.toISOString(), endTime: range.endTime.toISOString() },
   });
 

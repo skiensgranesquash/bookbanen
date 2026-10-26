@@ -15,24 +15,26 @@ export const COURT_ID = "1";
 export const OPENING_HOUR = 5; // 05:00
 export const CLOSING_HOUR = 23; // 23:00
 
-/** Lengde på ett "grid-rutenett"-tidsluke i kalenderen, i minutter. */
+/** Lengde på ett "grid-rutenett"-tidsluke i kalenderen, i minutter – også den kortest mulige bookingen. */
 export const SLOT_LENGTH_MINUTES = 30;
 
-/** Pris per påbegynt time, i øre (NOK). 35 kr/time, jf. dagens prisliste. */
-export const PRICE_PER_HOUR_ORE = 3500;
-
-/** Pris per rutenett-tidsluke (SLOT_LENGTH_MINUTES), utledet fra timeprisen. */
-export const PRICE_PER_SLOT_ORE = Math.round((PRICE_PER_HOUR_ORE * SLOT_LENGTH_MINUTES) / 60);
-
 /**
- * Hver booking er alltid nøyaktig én time (uansett om man kan VELGE
- * starttidspunkt hvert 30. minutt via SLOT_LENGTH_MINUTES over) – det finnes
- * ingen 30-minutters eller 2-timers bookinger.
+ * En booking er enten 30 minutter (én rutenett-tidsluke) eller 1 time (to
+ * påfølgende tidsluker) – kunden velger selv på bookingsiden hvilken av de
+ * to når de trykker på et ledig klokkeslett (se BookingCalendar.tsx). Det
+ * finnes ingen andre varigheter (f.eks. 90 minutter eller 2 timer).
  */
-export const BOOKING_DURATION_MINUTES = 60;
+export const BOOKABLE_DURATIONS_MINUTES = [30, 60] as const;
+export type BookingDurationMinutes = (typeof BOOKABLE_DURATIONS_MINUTES)[number];
 
-/** Det samme, uttrykt i antall rutenett-tidsluker (SLOT_LENGTH_MINUTES hver) – det tallet koden faktisk regner med. */
-export const BOOKING_DURATION_SLOTS = Math.round(BOOKING_DURATION_MINUTES / SLOT_LENGTH_MINUTES);
+export function isBookableDurationMinutes(value: unknown): value is BookingDurationMinutes {
+  return typeof value === "number" && (BOOKABLE_DURATIONS_MINUTES as readonly number[]).includes(value);
+}
+
+/** Samme varighet uttrykt i antall rutenett-tidsluker (SLOT_LENGTH_MINUTES hver) – det tallet koden faktisk regner med internt (occurrenceRange osv). */
+export function durationMinutesToSlots(durationMinutes: BookingDurationMinutes): number {
+  return Math.round(durationMinutes / SLOT_LENGTH_MINUTES);
+}
 
 /** Maks antall uker en gjentakende (ukentlig) booking kan strekke seg over. */
 export const MAX_RECURRING_WEEKS = 26;

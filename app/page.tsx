@@ -2,8 +2,9 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import BookingCalendar from "./BookingCalendar";
 import styles from "./booking.module.css";
-import { PRICE_PER_HOUR_ORE, VENUE_NAME } from "@/lib/config";
+import { VENUE_NAME } from "@/lib/config";
 import { getBranding } from "@/lib/settings/branding";
+import { getPricingSettings } from "@/lib/settings/pricing";
 import { getRecurringCutoffDate } from "@/lib/settings/recurringLimit";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -26,7 +27,11 @@ export async function generateMetadata(): Promise<Metadata> {
  * for en annen klubb/bedrift.
  */
 export default async function SquashBookingPage() {
-  const [branding, recurringCutoffDate] = await Promise.all([getBranding(), getRecurringCutoffDate()]);
+  const [branding, recurringCutoffDate, pricing] = await Promise.all([
+    getBranding(),
+    getRecurringCutoffDate(),
+    getPricingSettings(),
+  ]);
 
   return (
     <main className={styles.page}>
@@ -41,8 +46,8 @@ export default async function SquashBookingPage() {
         <div>
           <h1 className={styles.title}>Book squashbanen</h1>
           <p className={styles.subtitle}>
-            {branding.clubName} &middot; {VENUE_NAME} &middot; 1 time per booking, start hver hele og halve time
-            &middot; {(PRICE_PER_HOUR_ORE / 100).toLocaleString("nb-NO")} kr/time, betales med Vipps
+            {branding.clubName} &middot; {VENUE_NAME} &middot; Book 30 minutter eller 1 time &middot; fra{" "}
+            {(pricing.price30MinOre / 100).toLocaleString("nb-NO")} kr, betales med Vipps
           </p>
         </div>
         <div className={styles.headerActions}>
@@ -57,7 +62,11 @@ export default async function SquashBookingPage() {
         bekrefter dette før du går videre til betaling.
       </p>
 
-      <BookingCalendar recurringCutoffDate={recurringCutoffDate} />
+      <BookingCalendar
+        recurringCutoffDate={recurringCutoffDate}
+        price30MinOre={pricing.price30MinOre}
+        price60MinOre={pricing.price60MinOre}
+      />
     </main>
   );
 }

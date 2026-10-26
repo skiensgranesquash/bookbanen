@@ -238,6 +238,84 @@
   color: var(--brand-dark);
 }
 
+/* Halvtimen kunden nettopp trykket på, som venter på svar i
+   varighetsvelgeren (se .durationPicker under) – en lysere blå enn selve
+   "valgt" (ikke forvekslet med en bekreftet booking), og ALDRI flere celler
+   (kun ett klokkeslett kan vente på svar samtidig). */
+.slotButtonPending {
+  background: #eef4ff;
+  border-color: var(--brand);
+  color: var(--brand-dark);
+  box-shadow: inset 0 0 0 1.5px var(--brand);
+}
+
+/*
+ * Varighetsvelgeren som åpnes rett under rutenettet idet kunden trykker på
+ * et ledig klokkeslett – spør "30 min eller 1 time?" med pris for begge.
+ * "1 time" er skrudd av (men fortsatt synlig) når den neste halvtimen ikke
+ * er ledig, se canExtendToHour i BookingCalendar.tsx.
+ */
+.durationPicker {
+  margin-top: 12px;
+  padding: 14px;
+  background: #eef4ff;
+  border: 1px solid #c7d9f7;
+  border-radius: 12px;
+}
+
+.durationPickerLabel {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--brand-dark);
+}
+
+.durationPickerOptions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.durationOption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px;
+  border: 1.5px solid var(--brand);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.durationOption:hover:not(:disabled) {
+  background: #eef4ff;
+}
+
+.durationOption:disabled {
+  border-color: var(--border);
+  background: var(--taken);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.durationOptionLabel {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--brand-dark);
+}
+
+.durationOption:disabled .durationOptionLabel {
+  color: var(--muted);
+}
+
+.durationOptionPrice {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 /*
  * Sammenhengende celler i SAMME visuelle tilstand (valgt, hover-
  * forhåndsvisning, eller fysisk opptatt av en ekte booking) flyter sammen
@@ -286,20 +364,6 @@
   color: var(--danger-dark);
   cursor: not-allowed;
   text-decoration: line-through;
-}
-
-/* "Adjacent": en halvtime som er ledig i seg selv, men som ikke kan velges
-   som START fordi en hel time herfra ville krysset en nabobooking (se
-   reason-feltet fra /api/squash/availability) – nedtones grått, ikke rødt,
-   siden det ikke er noen som faktisk har tatt akkurat denne halvtimen.
-   Passerte klokkeslett vises ikke i rutenettet i det hele tatt (se
-   visibleSlots i BookingCalendar.tsx), så de trenger ingen egen stil her. */
-.slotButton.slotButtonAdjacent:disabled {
-  background: var(--taken);
-  border-color: var(--border);
-  color: var(--muted);
-  text-decoration: none;
-  opacity: 0.55;
 }
 
 .emptyState {

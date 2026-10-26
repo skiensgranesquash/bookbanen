@@ -12,17 +12,17 @@ import {
 } from "@/lib/slots";
 import { normalizeNorwegianMobile } from "@/lib/phone";
 import {
-  BOOKING_DURATION_MINUTES,
-  BOOKING_DURATION_SLOTS,
   COURT_ID,
+  durationMinutesToSlots,
   HOLD_MINUTES,
+  isBookableDurationMinutes,
   MAX_RECURRING_WEEKS,
-  PRICE_PER_SLOT_ORE,
   VENUE_NAME,
 } from "@/lib/config";
 import { formatDurationMinutes } from "@/lib/formatting";
 import { getPaymentProviderImpl } from "@/lib/payments";
 import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHours";
+import { getPricingSettings, priceForDuration } from "@/lib/settings/pricing";
 import { getRecurringCutoffDate } from "@/lib/settings/recurringLimit";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,8 @@ interface CreateBookingBody {
   mode?: "single" | "recurring";
   date?: string;
   time?: string;
+  /** 30 eller 60 (minutter) – se BOOKABLE_DURATIONS_MINUTES i lib/config.ts. */
+  duration?: number;
   weeks?: number;
   name?: string;
   phone?: string;
@@ -39,15 +41,17 @@ interface CreateBookingBody {
 /**
  * POST /api/squash/bookings
  *
- * Enkeltøkt: { mode: "single", date, time, name, phone }
- * Gjentakende: { mode: "recurring", date, time, weeks, name, phone }
+ * Enkeltøkt: { mode: "single", date, time, duration, name, phone }
+ * Gjentakende: { mode: "recurring", date, time, duration, weeks, name, phone }
  *   – "date" er FØRSTE forekomst; samme ukedag/klokkeslett gjentas `weeks`
  *   ganger totalt (inkludert den første).
  *
- * Varigheten er ALLTID nøyaktig BOOKING_DURATION_SLOTS (1 time) – den tas
- * bevisst ALDRI imot fra klienten (ingen `durationSlots`-felt i body lenger),
- * slik at det ikke finnes noen vei – verken en gyldig klient-UI eller et
- * håndskrevet API-kall – til å booke en annen varighet enn 1 time.
+ * `duration` må være 30 eller 60 (minutter) – kunden velger dette selv på
+ * bookingsiden når de trykker på et klokkeslett (se BookingCalendar.tsx).
+ * Prisen slås opp server-side fra adminpanelets priser (se
+ * lib/settings/pricing.ts) – klienten sender ALDRI selve beløpet, kun
+ * varigheten, slik at det ikke finnes noen vei til å booke med en annen pris
+ * enn den klubben faktisk har satt.
  *
  * Oppretter et midlertidig "hold" på alle tidsrommene og starter én samlet
  * betaling for hele bookingen. Ingenting blir bindende før betalingen er
@@ -63,10 +67,15 @@ export async function POST(request: NextRequest) {
 
   const mode = body.mode === "recurring" ? "recurring" : "single";
   const { date, time } = body;
-  const durationSlots = BOOKING_DURATION_SLOTS;
   const weeks = Number(body.weeks ?? 1);
   const name = body.name?.trim() ?? "";
   const phone = normalizeNorwegianMobile(body.phone ?? "");
+
+  if (!isBookableDurationMinutes(body.duration)) {
+    return NextResponse.json({ error: "Ugyldig varighet – må være 30 eller 60 minutter." }, { status: 400 });
+  }
+  const duration = body.duration;
+  const durationSlots = durationMinutesToSlots(duration);
 
   if (!date || !isValidBookingDateString(date)) {
     return NextResponse.json({ error: "Ugyldig dato." }, { status: 400 });
@@ -150,7 +159,8 @@ export async function POST(request: NextRequest) {
 
   const bookingId = randomUUID();
   const holdExpiresAt = new Date(Date.now() + HOLD_MINUTES * 60_000);
-  const totalAmountOre = PRICE_PER_SLOT_ORE * durationSlots * validOccurrences.length;
+  const pricing = await getPricingSettings();
+  const totalAmountOre = priceForDuration(pricing, duration) * validOccurrences.length;
 
   const repo = await getRepository();
   const createResult = await repo.createGroupWithSlots({
@@ -189,8 +199,8 @@ export async function POST(request: NextRequest) {
 
   const description =
     mode === "recurring"
-      ? `Squash ${time} hver uke i ${validOccurrences.length} uker fra ${date} – ${VENUE_NAME}`
-      : `Squash ${time}, ${date} (${formatDurationMinutes(BOOKING_DURATION_MINUTES)}) – ${VENUE_NAME}`;
+      ? `Squash ${time} hver uke i ${validOccurrences.length} uker fra ${date} (${formatDurationMinutes(duration)}) – ${VENUE_NAME}`
+      : `Squash ${time}, ${date} (${formatDurationMinutes(duration)}) – ${VENUE_NAME}`;
 
   try {
     const provider = await getPaymentProviderImpl();

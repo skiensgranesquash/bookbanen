@@ -3,7 +3,7 @@ import { getRepository } from "@/lib/db";
 import { getPaymentProviderImpl } from "@/lib/payments";
 import { isValidBookingDateString, isWithinOpeningHours, occurrenceRange } from "@/lib/slots";
 import { normalizeNorwegianMobile } from "@/lib/phone";
-import { BOOKING_DURATION_SLOTS } from "@/lib/config";
+import { SLOT_LENGTH_MINUTES } from "@/lib/config";
 import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHours";
 
 export const dynamic = "force-dynamic";
@@ -101,7 +101,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Ugyldig klokkeslett." }, { status: 400 });
     }
 
-    const range = occurrenceRange(date, time, BOOKING_DURATION_SLOTS);
+    // Bookingen kan opprinnelig ha vært enten 30 minutter eller 1 time (se
+    // BOOKABLE_DURATIONS_MINUTES i lib/config.ts) – når admin flytter
+    // klokkeslettet skal den EGNE, eksisterende varigheten beholdes (ikke
+    // tvinges til 1 time), så den utledes her fra bookingens egen,
+    // nåværende slot i stedet for en fast konstant.
+    const existingSlot = existing.slots[0];
+    const existingDurationMinutes = existingSlot
+      ? Math.round((new Date(existingSlot.endTime).getTime() - new Date(existingSlot.startTime).getTime()) / 60_000)
+      : 60;
+    const durationSlots = Math.max(1, Math.round(existingDurationMinutes / SLOT_LENGTH_MINUTES));
+
+    const range = occurrenceRange(date, time, durationSlots);
     if (!range) {
       return NextResponse.json({ error: "Ugyldig klokkeslett." }, { status: 400 });
     }

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRepository } from "@/lib/db";
 import { expireStaleHolds } from "@/lib/holds";
-import { BOOKING_DURATION_SLOTS, COURT_ID, MAX_RECURRING_WEEKS, PRICE_PER_SLOT_ORE } from "@/lib/config";
+import { COURT_ID, durationMinutesToSlots, isBookableDurationMinutes, MAX_RECURRING_WEEKS } from "@/lib/config";
 import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHours";
+import { getPricingSettings, priceForDuration } from "@/lib/settings/pricing";
 import { getRecurringCutoffDate } from "@/lib/settings/recurringLimit";
 import {
   generateWeeklyDates,
@@ -15,7 +16,7 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/squash/recurring-preview?date=YYYY-MM-DD&time=HH:mm&weeks=8
+ * GET /api/squash/recurring-preview?date=YYYY-MM-DD&time=HH:mm&weeks=8&duration=60
  *
  * Regner ut alle datoene en gjentakende ukentlig booking ville dekket, og om
  * hver av dem faktisk er ledig – slik at brukeren kan se hele rekken og
@@ -24,16 +25,15 @@ export const dynamic = "force-dynamic";
  * uansett på nytt, atomisk, når bookingen faktisk opprettes i
  * POST /api/squash/bookings.
  *
- * Varigheten er alltid nøyaktig BOOKING_DURATION_SLOTS (1 time) og tas
- * bevisst ALDRI imot som query-parameter – samme begrunnelse som i
- * POST /api/squash/bookings.
+ * `duration` må være 30 eller 60 (minutter) – samme varighet brukes for ALLE
+ * forekomstene i rekken.
  */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const date = params.get("date") ?? "";
   const time = params.get("time") ?? "";
-  const durationSlots = BOOKING_DURATION_SLOTS;
   const weeks = Number(params.get("weeks") ?? "1");
+  const durationParam = Number(params.get("duration"));
 
   if (!isValidBookingDateString(date) || date < todayInClubTimeZone()) {
     return NextResponse.json({ error: "Ugyldig startdato." }, { status: 400 });
@@ -44,6 +44,11 @@ export async function GET(request: NextRequest) {
   if (!Number.isInteger(weeks) || weeks < 1 || weeks > MAX_RECURRING_WEEKS) {
     return NextResponse.json({ error: `Antall uker må være mellom 1 og ${MAX_RECURRING_WEEKS}.` }, { status: 400 });
   }
+  if (!isBookableDurationMinutes(durationParam)) {
+    return NextResponse.json({ error: "Ugyldig varighet – må være 30 eller 60 minutter." }, { status: 400 });
+  }
+  const duration = durationParam;
+  const durationSlots = durationMinutesToSlots(duration);
 
   try {
     await expireStaleHolds();
@@ -96,10 +101,11 @@ export async function GET(request: NextRequest) {
   });
 
   const allAvailable = occurrenceResults.every((o) => o.available);
+  const pricing = await getPricingSettings();
 
   return NextResponse.json({
     occurrences: occurrenceResults,
     allAvailable,
-    totalAmountOre: PRICE_PER_SLOT_ORE * durationSlots * occurrenceResults.length,
+    totalAmountOre: priceForDuration(pricing, duration) * occurrenceResults.length,
   });
 }

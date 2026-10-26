@@ -152,6 +152,31 @@ export default function OpeningHoursManager() {
   const [savingCutoff, setSavingCutoff] = useState(false);
   const [cutoffMessage, setCutoffMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Priser for 30 min/1 time (se lib/settings/pricing.ts) – holdt som tekst
+  // (kr, med evt. komma/desimal) i selve input-feltene mens man skriver, og
+  // konvertert til øre først når man faktisk lagrer.
+  const [price30, setPrice30] = useState("");
+  const [price60, setPrice60] = useState("");
+  const [priceLoading, setPriceLoading] = useState(true);
+  const [savingPrice, setSavingPrice] = useState(false);
+  const [priceMessage, setPriceMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/settings/price", { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Kunne ikke hente priser.");
+        return res.json() as Promise<{ price30MinOre: number; price60MinOre: number }>;
+      })
+      .then((data) => {
+        setPrice30(String(data.price30MinOre / 100));
+        setPrice60(String(data.price60MinOre / 100));
+      })
+      .catch(() => {
+        // Ikke kritisk nok til å blokkere resten av siden – feltene starter bare tomme.
+      })
+      .finally(() => setPriceLoading(false));
+  }, []);
+
   useEffect(() => {
     fetch("/api/admin/settings/hours", { cache: "no-store" })
       .then((res) => {
@@ -257,6 +282,35 @@ export default function OpeningHoursManager() {
       setCutoffMessage({ ok: false, text: "Kunne ikke fjerne akkurat nå." });
     } finally {
       setSavingCutoff(false);
+    }
+  }
+
+  async function handleSavePrice(e: FormEvent) {
+    e.preventDefault();
+    setSavingPrice(true);
+    setPriceMessage(null);
+
+    const parsedPrice30 = Math.round(Number(price30.replace(",", ".")) * 100);
+    const parsedPrice60 = Math.round(Number(price60.replace(",", ".")) * 100);
+
+    try {
+      const res = await fetch("/api/admin/settings/price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ price30MinOre: parsedPrice30, price60MinOre: parsedPrice60 }),
+      });
+      const data = (await res.json()) as { error?: string; price30MinOre?: number; price60MinOre?: number };
+      if (!res.ok) {
+        setPriceMessage({ ok: false, text: data.error ?? "Kunne ikke lagre." });
+        return;
+      }
+      if (typeof data.price30MinOre === "number") setPrice30(String(data.price30MinOre / 100));
+      if (typeof data.price60MinOre === "number") setPrice60(String(data.price60MinOre / 100));
+      setPriceMessage({ ok: true, text: "Priser lagret." });
+    } catch {
+      setPriceMessage({ ok: false, text: "Kunne ikke lagre akkurat nå." });
+    } finally {
+      setSavingPrice(false);
     }
   }
 
@@ -375,6 +429,48 @@ export default function OpeningHoursManager() {
         <div className={styles.tabPanel}>
           <h1 className={styles.title}>Åpningstider</h1>
           <p className={styles.subtitle}>Standard åpningstider per ukedag, pluss ferier og andre annerledesdager.</p>
+
+      <div className={styles.card}>
+        <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Pris</h2>
+        <p className={styles.bookingMeta}>
+          Pris for 30 minutter og pris for 1 time settes helt uavhengig av hverandre, og gjelder umiddelbart for alle
+          nye bookinger (endrer ikke prisen på allerede betalte bookinger).
+        </p>
+        {priceLoading ? (
+          <p>Laster …</p>
+        ) : (
+          <form onSubmit={handleSavePrice} className={styles.form}>
+            <div className={styles.formRow}>
+              <label htmlFor="price-30">Pris for 30 minutter (kr)</label>
+              <input
+                id="price-30"
+                type="number"
+                min={0}
+                step="0.5"
+                value={price30}
+                onChange={(e) => setPrice30(e.target.value)}
+              />
+            </div>
+            <div className={styles.formRow}>
+              <label htmlFor="price-60">Pris for 1 time (kr)</label>
+              <input
+                id="price-60"
+                type="number"
+                min={0}
+                step="0.5"
+                value={price60}
+                onChange={(e) => setPrice60(e.target.value)}
+              />
+            </div>
+
+            {priceMessage && <p className={priceMessage.ok ? styles.success : styles.error}>{priceMessage.text}</p>}
+
+            <button type="submit" className={styles.submitButton} disabled={savingPrice || !price30 || !price60}>
+              {savingPrice ? "Lagrer …" : "Lagre priser"}
+            </button>
+          </form>
+        )}
+      </div>
 
       <div className={styles.card}>
         <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Grense for gjentakende bookinger</h2>

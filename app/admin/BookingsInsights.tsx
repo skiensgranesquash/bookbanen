@@ -42,9 +42,12 @@ interface AvailabilitySlot {
   startTime: string;
   endTime: string;
   label: string;
+  /** Om akkurat DENNE fysiske halvtimen er ledig – se app/api/squash/availability/route.ts. */
   available: boolean;
-  /** Kun satt når available er false. Se app/api/squash/availability/route.ts. */
-  reason?: "booked" | "adjacent";
+  /** Kun satt når available er false. */
+  reason?: "booked";
+  /** Om en hel time kan starte akkurat her (begge halvtimene er ledige). */
+  canExtendToHour: boolean;
 }
 
 /**
@@ -74,6 +77,8 @@ interface Occurrence {
   kind: BookingRow["kind"];
   customerName: string;
   customerPhone: string;
+  /** Faktisk varighet (minutter) på denne forekomsten – utledet fra slotten sitt eget start/slutt-tidspunkt, ikke en fast konstant, siden en booking nå kan være 30 min eller 1 time. */
+  durationMinutes: number;
 }
 
 /** Flater ut alle bookinger til én rad PER faktisk tidsrom (en gjentakende booking har ett tidsrom per uke) – dette er enheten "en booking" regnes i overalt her, både i kalenderen og i statistikken/listen under. */
@@ -84,6 +89,9 @@ function flattenOccurrences(bookings: BookingRow[], includeStatuses: BookingRow[
     for (const slot of booking.slots) {
       const dateStr = formatOslo(slot.startTime, "yyyy-MM-dd");
       const timeLabel = formatOslo(slot.startTime, "HH:mm");
+      const durationMinutes = Math.round(
+        (new Date(slot.endTime).getTime() - new Date(slot.startTime).getTime()) / 60_000
+      );
       const failed = booking.status === "cancelled" || booking.status === "expired";
       const shortText = booking.kind === "block" ? booking.note ?? "Blokkert" : booking.customerName;
       const label =
@@ -108,6 +116,7 @@ function flattenOccurrences(bookings: BookingRow[], includeStatuses: BookingRow[
         kind: booking.kind,
         customerName: booking.customerName,
         customerPhone: booking.customerPhone,
+        durationMinutes,
       });
     }
   }
@@ -169,6 +178,8 @@ type ModalState =
       label: string;
       /** Brukt til å vise riktig tekst/knapp i modalen, og til å be API-et aktivere bookingen på nytt hvis den er avlyst. */
       status: BookingRow["status"];
+      /** Bookingens EGEN, eksisterende varighet (minutter) – styrer hvilke klokkeslett som er valgbare i slot-rutenettet under (se bookableForModal). */
+      durationMinutes: number;
     };
 
 interface BookingsInsightsProps {
@@ -242,18 +253,37 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
   // kalles ubetinget her (regler for hooks), selv om selve rutenettet kun
   // vises inni modalen når needsSlotGrid && modalSlots har innhold.
   const effectiveModalSlots = modalSlots ?? [];
+
+  // Admin sin manuelle booking er alltid nøyaktig 1 time når man OPPRETTER en
+  // ny (se app/api/admin/bookings/manual/route.ts) – men når man REDIGERER en
+  // eksisterende booking sitt klokkeslett, beholdes bookingens EGEN,
+  // opprinnelige varighet (30 min eller 1 time, se
+  // app/api/admin/bookings/[id]/route.ts), så rutenettet må vite hvilken av
+  // de to det gjelder, både for hvilke celler som er valgbare OG om valget
+  // skal vises som én eller to sammenslåtte halvtimer.
+  const modalDurationMinutes = modal === null ? 60 : modal.mode === "create" ? 60 : modal.durationMinutes;
+
   const manualSelectedIndex = manualTime ? effectiveModalSlots.findIndex((s) => s.label === manualTime) : -1;
-  const manualSelectedSecondHalf = secondHalfIndex(effectiveModalSlots, manualSelectedIndex);
+  const manualSelectedSecondHalf =
+    modalDurationMinutes === 60 ? secondHalfIndex(effectiveModalSlots, manualSelectedIndex) : -1;
   const manualHoveredIndex = supportsHover
     ? effectiveModalSlots.findIndex((s) => s.label === hoveredManualTime)
     : -1;
-  const manualHoveredSecondHalf = manualHoveredIndex >= 0 ? secondHalfIndex(effectiveModalSlots, manualHoveredIndex) : -1;
+  const manualHoveredSecondHalf =
+    modalDurationMinutes === 60 && manualHoveredIndex >= 0 ? secondHalfIndex(effectiveModalSlots, manualHoveredIndex) : -1;
+
+  /** Om en gitt rutenett-halvtime faktisk kan velges for DENNE modalens varighet. */
+  function bookableForModal(slot: AvailabilitySlot): boolean {
+    if (!slot.available) return false;
+    return modalDurationMinutes <= 30 || slot.canExtendToHour;
+  }
 
   function manualStateFor(i: number): SlotVisualState {
     const slot = effectiveModalSlots[i];
     if (i === manualSelectedIndex || (manualSelectedSecondHalf >= 0 && i === manualSelectedSecondHalf)) return "selected";
     if (i === manualHoveredIndex || (manualHoveredSecondHalf >= 0 && i === manualHoveredSecondHalf)) return "hover";
-    if (!slot.available) return slot.reason === "booked" ? "booked" : "blocked";
+    if (!slot.available) return "booked";
+    if (!bookableForModal(slot)) return "blocked";
     return "normal";
   }
 
@@ -380,7 +410,15 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
   }
 
   function openEditModal(occ: Occurrence) {
-    setModal({ mode: "edit", id: occ.id, date: occ.dateStr, kind: occ.kind, label: occ.label, status: occ.status });
+    setModal({
+      mode: "edit",
+      id: occ.id,
+      date: occ.dateStr,
+      kind: occ.kind,
+      label: occ.label,
+      status: occ.status,
+      durationMinutes: occ.durationMinutes,
+    });
     setManualTime(occ.timeLabel);
     setManualName(occ.customerName);
     setManualPhone(occ.customerPhone);
@@ -882,12 +920,14 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
                   <div className={styles.manualSlotGrid} ref={manualGridRef}>
                     {modalSlots.map((slot, i) => {
                       const isSelected = manualTime === slot.label;
-                      const disabled = !slot.available && !isSelected;
+                      const disabled = !bookableForModal(slot) && !isSelected;
                       const state = manualStateFor(i);
                       const classNames = [styles.manualSlotButton];
-                      // "blocked" (grått) = kun utilgjengelig som starttidspunkt,
-                      // ikke selv fysisk opptatt – samme skille som den offentlige
-                      // bookingsiden (se reason i app/api/squash/availability).
+                      // "blocked" (grått) = fysisk ledig halvtime, men ikke
+                      // nok plass til DENNE modalens varighet (vanligvis fordi
+                      // en hel time ikke får plass her) – samme skille som den
+                      // offentlige bookingsiden sitt canExtendToHour-flagg (se
+                      // app/api/squash/availability/route.ts).
                       if (state === "blocked") classNames.push(styles.manualSlotButtonAdjacent);
                       if (state === "selected") classNames.push(styles.manualSlotButtonSelected);
                       else if (state === "hover") classNames.push(styles.manualSlotButtonHoverPreview);

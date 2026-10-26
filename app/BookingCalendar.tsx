@@ -3,13 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import styles from "./booking.module.css";
 import DatePicker from "./DatePicker";
-import {
-  BOOKING_DURATION_MINUTES,
-  BOOKING_DURATION_SLOTS,
-  MAX_RECURRING_WEEKS,
-  PRICE_PER_SLOT_ORE,
-  SLOT_LENGTH_MINUTES,
-} from "@/lib/config";
+import { MAX_RECURRING_WEEKS, SLOT_LENGTH_MINUTES, type BookingDurationMinutes } from "@/lib/config";
 import { maxBookableDate, todayInClubTimeZone } from "@/lib/slots";
 import { formatDurationMinutes, formatOslo, formatPriceOre } from "@/lib/formatting";
 import { normalizeNorwegianMobile } from "@/lib/phone";
@@ -19,9 +13,12 @@ interface AvailabilitySlot {
   startTime: string;
   endTime: string;
   label: string;
+  /** Om akkurat DENNE fysiske halvtimen er ledig. */
   available: boolean;
   /** Kun satt når available er false. Se app/api/squash/availability/route.ts. */
-  reason?: "booked" | "adjacent";
+  reason?: "booked";
+  /** Om en hel time kan starte akkurat her (begge halvtimene er ledige). Styrer om "1 time"-valget kan velges i varighetsvelgeren under. */
+  canExtendToHour: boolean;
 }
 
 interface AvailabilityResponse {
@@ -49,10 +46,10 @@ interface RecurringPreviewResponse {
 }
 
 /**
- * Om en gitt rutenett-slot er en ledig, bookbar hel time. Hver slot fra
- * /api/squash/availability dekker allerede nøyaktig BOOKING_DURATION_MINUTES
- * (se lib/slots.ts – generateSlotsForDate), så det holder å sjekke denne ene
- * slottens eget `available`-flagg – ingen oppslag av "neste" slot nødvendig.
+ * Om en gitt rutenett-slot i det hele tatt kan TRYKKES PÅ for å åpne
+ * varighetsvelgeren (se duration-state under) – dvs. at denne fysiske
+ * halvtimen selv er ledig. Om man deretter faktisk FÅR velge "1 time" der
+ * avgjøres separat av slottens eget `canExtendToHour`-flagg.
  */
 function isBookableSlot(slots: AvailabilitySlot[], i: number): boolean {
   return i >= 0 && i < slots.length && slots[i].available;
@@ -112,9 +109,12 @@ function writeRemembered(key: string, value: string) {
 interface BookingCalendarProps {
   /** Siste dato en gjentakende booking har lov til å dekke (satt av klubben i adminpanelet), eller null for ingen egen grense – se lib/settings/recurringLimit.ts. */
   recurringCutoffDate: string | null;
+  /** Dagens priser (i øre), satt av klubben i adminpanelet – se lib/settings/pricing.ts. De to er HELT uavhengige av hverandre (1 time er ikke nødvendigvis dobbelt så dyrt som 30 min). */
+  price30MinOre: number;
+  price60MinOre: number;
 }
 
-export default function BookingCalendar({ recurringCutoffDate }: BookingCalendarProps) {
+export default function BookingCalendar({ recurringCutoffDate, price30MinOre, price60MinOre }: BookingCalendarProps) {
   const today = useMemo(() => todayInClubTimeZone(), []);
   const maxDate = useMemo(() => maxBookableDate(), []);
 
@@ -123,13 +123,18 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [closedInfo, setClosedInfo] = useState<{ closed: boolean; note: string | null } | null>(null);
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
+  // Varigheten kunden har valgt for `selectedLabel` – `null` mens valget
+  // venter (rett etter at man har trykket på et klokkeslett, FØR man har
+  // svart "30 min" eller "1 time" i velgeren som da vises, se
+  // varighetsvelger-JSX-en under). Begge nullstilles sammen, se tapSlot.
+  const [duration, setDuration] = useState<BookingDurationMinutes | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
 
-  // Hover-markering av "den andre halvtimen" er kun en ekstra tydeliggjøring
-  // for pekerenheter som faktisk HAR hover (mus) – på mobil/touch er det ikke
-  // noe konsept om å "holde over" noe før man trykker, så der er det den
-  // faktiske VALGTE tiden (selectedLabel, satt ved tap) som alene driver
-  // samme dobbel-markering. Sjekkes én gang (endrer seg ikke i praksis).
+  // Hover er kun en ekstra tydeliggjøring for pekerenheter som faktisk HAR
+  // hover (mus) av akkurat DEN halvtimen man peker på – siden varigheten ikke
+  // er valgt før man trykker, er det ingen "hel time" å forhåndsvise ved
+  // museover lenger (i motsetning til tidligere). Sjekkes én gang (endrer seg
+  // ikke i praksis).
   const [supportsHover] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches
   );
@@ -235,31 +240,42 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
   const visibleSlots = useMemo(() => slots.filter((s) => !isPastStart(s, now)), [slots, now]);
 
   const selectedIndex = visibleSlots.findIndex((s) => s.label === selectedLabel);
-  const selectedSecondHalfIndex = secondHalfIndex(visibleSlots, selectedIndex);
+  const canExtendSelectedToHour = selectedIndex >= 0 ? visibleSlots[selectedIndex].canExtendToHour : false;
+  // Begge halvtimene vises kun sammenslått når kunden faktisk HAR valgt "1
+  // time" (duration === 60) – før det er valgt (duration === null) er det
+  // bare den ene halvtimen som venter på et svar, se "pending" i stateFor.
+  const selectedSecondHalfIndex = duration === 60 ? secondHalfIndex(visibleSlots, selectedIndex) : -1;
   const hoveredIndex = supportsHover ? visibleSlots.findIndex((s) => s.label === hoveredLabel) : -1;
-  const hoveredSecondHalfIndex = hoveredIndex >= 0 ? secondHalfIndex(visibleSlots, hoveredIndex) : -1;
   const bookingEndLabel =
-    selectedIndex >= 0 && isBookableSlot(visibleSlots, selectedIndex)
-      ? formatOslo(visibleSlots[selectedIndex].endTime, "HH:mm")
+    selectedIndex >= 0 && duration !== null
+      ? formatOslo(
+          duration === 60 && selectedSecondHalfIndex >= 0
+            ? visibleSlots[selectedSecondHalfIndex].endTime
+            : visibleSlots[selectedIndex].endTime,
+          "HH:mm"
+        )
       : null;
 
   /**
    * Visuell tilstand for rutenett-slot `i` – avgjør både farge/klasse OG om
    * den skal flyte sammen med nabocellen (se useSlotMerging): "selected"
-   * dekker BÅDE halvtimene i den valgte timen (ingen fargeforskjell mellom
-   * dem lenger – de skal se ut som ÉN sammenhengende blokk), "hover" det
-   * samme for forhåndsvisning ved museover, "booked" er en halvtime som
-   * FYSISK overlapper en ekte booking (rødt, flyter sammen med naboceller i
-   * samme tilstand – f.eks. en 2-timers booking dekker 4 halvtimer), og
-   * "blocked" er en halvtime som kun er blokkert som starttidspunkt (grått –
-   * passerte tidspunkter er allerede filtrert bort av visibleSlots over, så
-   * denne tilstanden gjelder i praksis bare "adjacent").
+   * dekker BÅDE halvtimene når kunden har valgt "1 time" (ingen
+   * fargeforskjell mellom dem lenger – de skal se ut som ÉN sammenhengende
+   * blokk), "pending" er den ENE halvtimen kunden nettopp trykket på og som
+   * venter på svar i varighetsvelgeren (lysere blå, aldri flere celler),
+   * "hover" er forhåndsvisning ved museover av akkurat denne halvtimen,
+   * "booked" er en halvtime som FYSISK overlapper en ekte booking (rødt,
+   * flyter sammen med naboceller i samme tilstand – f.eks. en 2-timers
+   * booking dekker 4 halvtimer).
    */
   function stateFor(i: number): SlotVisualState {
     const slot = visibleSlots[i];
-    if (i === selectedIndex || (selectedSecondHalfIndex >= 0 && i === selectedSecondHalfIndex)) return "selected";
-    if (i === hoveredIndex || (hoveredSecondHalfIndex >= 0 && i === hoveredSecondHalfIndex)) return "hover";
-    if (!slot.available) return slot.reason === "booked" ? "booked" : "blocked";
+    if (duration !== null && (i === selectedIndex || (selectedSecondHalfIndex >= 0 && i === selectedSecondHalfIndex))) {
+      return "selected";
+    }
+    if (duration === null && i === selectedIndex) return "pending";
+    if (i === hoveredIndex) return "hover";
+    if (!slot.available) return "booked";
     return "normal";
   }
 
@@ -267,7 +283,7 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
   const { containerRef, registerButtonRef, mergeLeft, mergeRight, bridges } = useSlotMerging(
     mergeSlots,
     (_mSlot, i) => stateFor(i),
-    [selectedIndex, selectedSecondHalfIndex, hoveredIndex, hoveredSecondHalfIndex]
+    [selectedIndex, selectedSecondHalfIndex, duration, hoveredIndex]
   );
 
   // Hent ledige tider for valgt dag.
@@ -275,6 +291,7 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
     const controller = new AbortController();
     setLoadingSlots(true);
     setSelectedLabel(null);
+    setDuration(null);
     setErrorMessage(null);
 
     fetch(`/api/squash/availability?date=${date}`, { signal: controller.signal })
@@ -299,7 +316,7 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
 
   // Forhåndsvis den gjentakende rekken når relevante felter endrer seg.
   useEffect(() => {
-    if (!recurring || !selectedLabel) {
+    if (!recurring || !selectedLabel || duration === null) {
       setPreview(null);
       return;
     }
@@ -311,6 +328,7 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
       date,
       time: selectedLabel,
       weeks: String(weeks),
+      duration: String(duration),
     });
 
     fetch(`/api/squash/recurring-preview?${params.toString()}`, { signal: controller.signal })
@@ -322,11 +340,11 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
       .finally(() => setLoadingPreview(false));
 
     return () => controller.abort();
-  }, [recurring, date, selectedLabel, weeks]);
+  }, [recurring, date, selectedLabel, weeks, duration]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!selectedLabel) return;
+    if (!selectedLabel || duration === null) return;
     if (!membershipConfirmed) return;
     if (recurring && preview && !preview.allAvailable) return;
 
@@ -357,6 +375,7 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
           mode: recurring ? "recurring" : "single",
           date,
           time: selectedLabel,
+          duration,
           weeks: recurring ? weeks : undefined,
           name,
           phone,
@@ -382,15 +401,35 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
     }
   }
 
+  /**
+   * Trykk på et ledig klokkeslett i rutenettet. Trykker man på det ALLEREDE
+   * valgte, FERDIG BEKREFTEDE klokkeslettet (duration er satt) igjen,
+   * nullstilles hele valget – ellers blir dette det nye valgte klokkeslettet
+   * og varighetsvelgeren åpnes på nytt (duration settes til null, uansett om
+   * det var et helt nytt klokkeslett eller et som bare ventet på svar).
+   */
+  function tapSlot(slot: AvailabilitySlot) {
+    if (!slot.available) return;
+    if (slot.label === selectedLabel && duration !== null) {
+      setSelectedLabel(null);
+      setDuration(null);
+      return;
+    }
+    setSelectedLabel(slot.label);
+    setDuration(null);
+  }
+
   const occurrenceCount = recurring ? weeks : 1;
-  const totalPrice =
-    recurring && preview ? preview.totalAmountOre : PRICE_PER_SLOT_ORE * BOOKING_DURATION_SLOTS * occurrenceCount;
+  const priceForSelectedDuration = duration === 60 ? price60MinOre : duration === 30 ? price30MinOre : 0;
+  const totalPrice = recurring && preview ? preview.totalAmountOre : priceForSelectedDuration * occurrenceCount;
   // Navn/telefon er BEVISST ikke med her – knappen skal forbli klikkbar selv
   // om de mangler, slik at et trykk på den tar deg til feltet som mangler
-  // (se handleSubmit) i stedet for å virke "død". Medlemskap er fortsatt et
-  // hardt krav siden det er en bekreftelse brukeren selv må ha krysset av.
+  // (se handleSubmit) i stedet for å virke "død". Medlemskap og valgt
+  // varighet er fortsatt harde krav – varighet er en reell beslutning
+  // brukeren selv må ta (se varighetsvelgeren under), ikke noe som kan
+  // forhåndsutfylles.
   const canStartPayment =
-    !!selectedLabel && membershipConfirmed && (!recurring || preview?.allAvailable);
+    !!selectedLabel && duration !== null && membershipConfirmed && (!recurring || preview?.allAvailable);
 
   return (
     <>
@@ -425,17 +464,11 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
                 const state = stateFor(i);
                 const classNames = [styles.slotButton];
                 if (state === "selected") classNames.push(styles.slotButtonSelected);
+                else if (state === "pending") classNames.push(styles.slotButtonPending);
                 else if (state === "hover") classNames.push(styles.slotButtonHoverPreview);
-                // En halvtime som i seg selv er ledig, men der en ny hel time
-                // ikke kan STARTE akkurat her uten å krysse inn i en
-                // nabobooking, nedtones grått (se reason i
-                // app/api/squash/availability/route.ts) – det er ikke noen
-                // som faktisk har tatt akkurat denne halvtimen, i motsetning
-                // til "booked" (rødt/gjennomstreket, fysisk opptatt).
-                else if (state === "blocked") classNames.push(styles.slotButtonAdjacent);
-                // Sammenhengende celler i SAMME tilstand (valgt time, hover-
-                // forhåndsvisning, eller en ekte bookings egne halvtimer) flyter
-                // visuelt sammen til én blokk – se useSlotMerging.
+                // Sammenhengende celler i SAMME tilstand (valgt time, eller en
+                // ekte bookings egne halvtimer) flyter visuelt sammen til én
+                // blokk – se useSlotMerging.
                 if (mergeRight(slot.label)) classNames.push(styles.mergeRight);
                 if (mergeLeft(slot.label)) classNames.push(styles.mergeLeft);
                 return (
@@ -445,7 +478,7 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
                     type="button"
                     disabled={!bookable}
                     className={classNames.join(" ")}
-                    onClick={() => setSelectedLabel(slot.label)}
+                    onClick={() => tapSlot(slot)}
                     onMouseEnter={() => {
                       if (supportsHover && bookable) setHoveredLabel(slot.label);
                     }}
@@ -474,23 +507,48 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
                 />
               ))}
             </div>
+
+            {selectedLabel && duration === null && selectedIndex >= 0 && (
+              <div className={styles.durationPicker}>
+                <p className={styles.durationPickerLabel}>Hvor lenge vil du booke kl. {selectedLabel}?</p>
+                <div className={styles.durationPickerOptions}>
+                  <button
+                    type="button"
+                    className={styles.durationOption}
+                    onClick={() => setDuration(30)}
+                  >
+                    <span className={styles.durationOptionLabel}>{formatDurationMinutes(30)}</span>
+                    <span className={styles.durationOptionPrice}>{formatPriceOre(price30MinOre)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.durationOption}
+                    disabled={!canExtendSelectedToHour}
+                    onClick={() => canExtendSelectedToHour && setDuration(60)}
+                    title={canExtendSelectedToHour ? undefined : "Den neste halvtimen er ikke ledig"}
+                  >
+                    <span className={styles.durationOptionLabel}>{formatDurationMinutes(60)}</span>
+                    <span className={styles.durationOptionPrice}>{formatPriceOre(price60MinOre)}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             <p className={styles.subtitleText}>
-              Hver booking varer {formatDurationMinutes(BOOKING_DURATION_MINUTES)} – velger du et klokkeslett flyter
-              begge halvtimene sammen til én blokk, slik at det er tydelig at hele timen følger med. Grønt er ledig,
-              rødt er fysisk opptatt (og flyter sammen på samme måte). Grått er at en hel time rett og slett ikke får
-              plass her uten å krysse en annen økt.
+              Trykk på et ledig klokkeslett og velg om du vil booke 30 minutter eller 1 time. Grønt er ledig, rødt er
+              fysisk opptatt (sammenhengende opptatte halvtimer flyter sammen til én blokk).
             </p>
           </>
         )}
       </div>
 
-      {selectedLabel && (
+      {selectedLabel && duration !== null && (
         <form id="booking-form" className={`${styles.card} ${styles.form}`} onSubmit={handleSubmit}>
           <div className={styles.formRow}>
             <label>Du booker</label>
             <p className={styles.subtitleText}>
               {formatOslo(date, "EEEE d. MMMM")}, kl. {selectedLabel}
-              {bookingEndLabel ? `–${bookingEndLabel}` : ""} ({formatDurationMinutes(BOOKING_DURATION_MINUTES)})
+              {bookingEndLabel ? `–${bookingEndLabel}` : ""} ({formatDurationMinutes(duration)})
             </p>
           </div>
 
@@ -539,7 +597,7 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
           )}
 
           <div className={styles.summary}>
-            {recurring ? `${occurrenceCount} økter à` : "Totalt"} {formatPriceOre(PRICE_PER_SLOT_ORE * BOOKING_DURATION_SLOTS)}
+            {recurring ? `${occurrenceCount} økter à` : "Totalt"} {formatPriceOre(priceForSelectedDuration)}
             {recurring && <> = {formatPriceOre(totalPrice)} totalt</>}
           </div>
 
@@ -597,7 +655,7 @@ export default function BookingCalendar({ recurringCutoffDate }: BookingCalendar
        * linje nederst, på brede skjermer et lite flytende kort nede til
        * høyre – se .floatingBar / media query i booking.module.css.
        */}
-      {selectedLabel && (
+      {selectedLabel && duration !== null && (
         <>
           <div
             className={`${styles.floatingBar} ${contactFieldFocused ? styles.floatingBarHidden : ""}`}

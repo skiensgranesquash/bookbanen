@@ -15,8 +15,11 @@ import { SLOT_LENGTH_MINUTES } from "@/lib/config";
  *
  * "normal" (ledig, grønn) slås ALDRI sammen – det ville sett ut som om flere
  * uavhengige valgbare tider er tvunget sammen til én, noe de ikke er.
+ * "pending" (lyseblå, kun på den offentlige bookingsiden) slås heller ikke
+ * sammen – det er alltid akkurat ÉN halvtime som venter på at kunden skal
+ * velge 30 min eller 1 time, se BookingCalendar.tsx.
  */
-export type SlotVisualState = "selected" | "hover" | "booked" | "blocked" | "normal";
+export type SlotVisualState = "selected" | "hover" | "booked" | "blocked" | "pending" | "normal";
 
 export interface MergeableSlot {
   /** ISO-8601 starttidspunkt. */
