@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import styles from "./booking.module.css";
 import DatePicker from "./DatePicker";
 import { MAX_RECURRING_WEEKS, SLOT_LENGTH_MINUTES, type BookingDurationMinutes } from "@/lib/config";
-import { maxBookableDate, todayInClubTimeZone } from "@/lib/slots";
+import { maxBookableDate, maxRecurringWeeksUntil, todayInClubTimeZone } from "@/lib/slots";
 import { formatDurationMinutes, formatOslo, formatPriceOre } from "@/lib/formatting";
 import { normalizeNorwegianMobile } from "@/lib/phone";
 import { useSlotMerging, type SlotVisualState } from "@/lib/useSlotMerging";
@@ -142,6 +142,30 @@ export default function BookingCalendar({ recurringCutoffDate, price30MinOre, pr
 
   const [recurring, setRecurring] = useState(false);
   const [weeks, setWeeks] = useState(4);
+
+  // Om gjentakende booking i det hele tatt er mulig fra den valgte
+  // startdatoen (kun relevant i det sjeldne tilfellet at datoen ble valgt
+  // FØR "Gjenta"-boksen ble huket av, og allerede ligger forbi klubbens
+  // egen grense – se recurringCutoffDate i props) – og, uansett, det STØRSTE
+  // antallet uker en rekke fra akkurat denne datoen har plass til innenfor
+  // den grensen. Begge regnes ut her i UI-et SLIK AT man rett og slett ikke
+  // kan velge flere uker enn det som er igjen, i stedet for å oppdage det
+  // først i forhåndsvisningen (eller enda verre: etter betaling).
+  const recurringAllowed = !recurringCutoffDate || date <= recurringCutoffDate;
+  const maxWeeksAllowed = useMemo(
+    () => maxRecurringWeeksUntil(date, recurringCutoffDate),
+    [date, recurringCutoffDate]
+  );
+
+  // Skru av "gjentakende" igjen hvis datoen endres til noe forbi grensen
+  // mens den står huket av, og hold "antall uker" innenfor det som faktisk
+  // er lov fra den til enhver tid valgte datoen.
+  useEffect(() => {
+    if (recurring && !recurringAllowed) setRecurring(false);
+  }, [recurring, recurringAllowed]);
+  useEffect(() => {
+    setWeeks((w) => Math.min(Math.max(1, maxWeeksAllowed), w));
+  }, [maxWeeksAllowed]);
 
   const [preview, setPreview] = useState<RecurringPreviewResponse | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -543,7 +567,7 @@ export default function BookingCalendar({ recurringCutoffDate, price30MinOre, pr
       </div>
 
       {selectedLabel && duration !== null && (
-        <form id="booking-form" className={`${styles.card} ${styles.form}`} onSubmit={handleSubmit}>
+        <form id="booking-form" className={`${styles.card} ${styles.form}`} onSubmit={handleSubmit} noValidate>
           <div className={styles.formRow}>
             <label>Du booker</label>
             <p className={styles.subtitleText}>
@@ -554,9 +578,20 @@ export default function BookingCalendar({ recurringCutoffDate, price30MinOre, pr
 
           <div className={styles.formRow}>
             <label className={styles.checkboxOption}>
-              <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={recurring}
+                disabled={!recurringAllowed}
+                onChange={(e) => setRecurring(e.target.checked)}
+              />
               Gjenta samme ukedag/klokkeslett hver uke
             </label>
+            {!recurringAllowed && recurringCutoffDate && (
+              <p className={styles.subtitleText}>
+                Gjentakende booking er ikke mulig fra denne datoen – den er etter siste dato for gjentakende
+                bookinger ({formatOslo(recurringCutoffDate, "d. MMM yyyy")}).
+              </p>
+            )}
           </div>
 
           {recurring && (
@@ -566,10 +601,17 @@ export default function BookingCalendar({ recurringCutoffDate, price30MinOre, pr
                 id="booking-weeks"
                 type="number"
                 min={1}
-                max={MAX_RECURRING_WEEKS}
+                max={maxWeeksAllowed}
                 value={weeks}
-                onChange={(e) => setWeeks(Math.max(1, Math.min(MAX_RECURRING_WEEKS, Number(e.target.value) || 1)))}
+                onChange={(e) => setWeeks(Math.max(1, Math.min(maxWeeksAllowed, Number(e.target.value) || 1)))}
               />
+              {recurringCutoffDate && maxWeeksAllowed < MAX_RECURRING_WEEKS && (
+                <p className={styles.subtitleText}>
+                  Du kan maks booke {maxWeeksAllowed} {maxWeeksAllowed === 1 ? "uke" : "uker"} fra denne datoen – det
+                  er ikke mulig å booke etter {formatOslo(recurringCutoffDate, "d. MMM yyyy")} (siste dato for
+                  gjentakende bookinger, satt av klubben).
+                </p>
+              )}
 
               {loadingPreview && <p className={styles.emptyState}>Sjekker ledighet for alle ukene …</p>}
 
