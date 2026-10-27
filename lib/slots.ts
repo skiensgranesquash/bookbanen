@@ -1,6 +1,59 @@
 import { addDays, addMinutes } from "date-fns";
-import { format, fromZonedTime } from "date-fns-tz";
+import { fromZonedTime } from "date-fns-tz";
 import { MAX_DAYS_AHEAD, MAX_RECURRING_WEEKS, SLOT_LENGTH_MINUTES, TIME_ZONE } from "./config";
+
+/**
+ * Henter dato- og klokkeslett-komponenter for et tidspunkt i en gitt
+ * IANA-tidssone, med Intl.DateTimeFormat (innebygd i JavaScript) i stedet
+ * for date-fns-tz sin egen `format(..., { timeZone })`.
+ *
+ * Grunnen: `format(..., { timeZone: TIME_ZONE })` fra date-fns-tz brukte vi
+ * tidligere her, men i kjøretidsmiljøet dette faktisk kjører i (Netlify
+ * Functions) stille-ignorerer den timeZone-valget og formaterer i UTC i
+ * stedet for Europe/Oslo. Det ble bekreftet direkte mot produksjon: en
+ * resepsjon forsøkte å booke en gjentakende time kl. 05:00 norsk tid, som
+ * ble avvist som "stengt" – fordi koden i praksis sjekket den som om den
+ * startet 04:00 (UTC). Alt mellom midnatt og normal-tidssonens offset fra
+ * UTC (05:00-05:59 vinterstid) traff dermed feil side av åpningstiden.
+ * Samme feil kunne i prinsippet også ha gjort at en booking helt i
+ * stengetidsgrensa feilaktig ble godtatt, siden den samme 1-times-forskyvin-
+ * gen gjelder begge veier.
+ *
+ * Intl.DateTimeFormat sin tidssone-håndtering er en del av selve
+ * JavaScript-motoren (ikke avhengig av en ekstra tidssone-database som kan
+ * mangle i et redusert kjøretidsmiljø), så dette er en tryggere, uavhengig
+ * vei til nøyaktig samme tall – verifisert direkte mot live-API-et etter
+ * denne endringen (05:00, 05:30 og 06:00 norsk tid ga nå alle riktig svar,
+ * der kun 05:00/05:30 tidligere feilaktig ble vist som stengt).
+ */
+function zonedParts(
+  date: Date,
+  timeZone: string
+): { y: string; m: string; d: string; hh: string; mm: string } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return { y: get("year"), m: get("month"), d: get("day"), hh: get("hour"), mm: get("minute") };
+}
+
+/** "YYYY-MM-DD" for et tidspunkt i en gitt tidssone – se zonedParts over. */
+function zonedDateString(date: Date, timeZone: string): string {
+  const { y, m, d } = zonedParts(date, timeZone);
+  return `${y}-${m}-${d}`;
+}
+
+/** "HH:mm" for et tidspunkt i en gitt tidssone – se zonedParts over. */
+function zonedTimeString(date: Date, timeZone: string): string {
+  const { hh, mm } = zonedParts(date, timeZone);
+  return `${hh}:${mm}`;
+}
 
 export interface SlotDefinition {
   /** UTC-tidspunkt økten starter. */
@@ -20,12 +73,12 @@ export function isValidBookingDateString(dateStr: string): boolean {
 
 /** Dagens dato i klubbens tidssone, som "YYYY-MM-DD". */
 export function todayInClubTimeZone(): string {
-  return format(new Date(), "yyyy-MM-dd", { timeZone: TIME_ZONE });
+  return zonedDateString(new Date(), TIME_ZONE);
 }
 
 /** Siste dato man har lov til å booke en enkelttime, som "YYYY-MM-DD". */
 export function maxBookableDate(): string {
-  return format(addDays(new Date(), MAX_DAYS_AHEAD), "yyyy-MM-dd", { timeZone: TIME_ZONE });
+  return zonedDateString(addDays(new Date(), MAX_DAYS_AHEAD), TIME_ZONE);
 }
 
 /** Om en dato er innenfor vinduet man har lov til å booke en enkelttime. */
@@ -152,12 +205,12 @@ export function isWithinOpeningHours(
 ): boolean {
   if (hours.closed || hours.intervals.length === 0) return false;
 
-  const startDay = format(startTime, "yyyy-MM-dd", { timeZone: TIME_ZONE });
-  const endDay = format(endTime, "yyyy-MM-dd", { timeZone: TIME_ZONE });
+  const startDay = zonedDateString(startTime, TIME_ZONE);
+  const endDay = zonedDateString(endTime, TIME_ZONE);
   if (startDay !== endDay) return false;
 
-  const startLocal = format(startTime, "HH:mm", { timeZone: TIME_ZONE });
-  const endLocal = format(endTime, "HH:mm", { timeZone: TIME_ZONE });
+  const startLocal = zonedTimeString(startTime, TIME_ZONE);
+  const endLocal = zonedTimeString(endTime, TIME_ZONE);
   return hours.intervals.some((interval) => startLocal >= interval.open && endLocal <= interval.close);
 }
 
