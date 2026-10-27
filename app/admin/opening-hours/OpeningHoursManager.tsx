@@ -16,6 +16,7 @@ import {
 import { nb } from "date-fns/locale";
 import styles from "../admin.module.css";
 import AdminNav from "../AdminNav";
+import { MAX_RECURRING_WEEKS } from "@/lib/config";
 
 type WeekdayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
@@ -481,6 +482,11 @@ export default function OpeningHoursManager() {
           Siste dato en gjentakende (ukentlig) booking har lov til å dekke. Du får en påminnelse her i adminpanelet
           når datoen nærmer seg (siste uke før den passerer), og hver dag etter at den har passert – helt til du
           setter en ny dato. La feltet stå tomt for å kun bruke det vanlige maks-antallet uker.
+        </p>
+        <p className={styles.bookingMeta}>
+          Maks antall bookinger i én serie er uansett {MAX_RECURRING_WEEKS} uker (ca. et halvt år) – det er en fast,
+          teknisk grense i koden og kan ikke endres herfra. Denne datoen kan bare gjøre grensen KORTERE, aldri lengre
+          enn det.
         </p>
         {cutoffLoading ? (
           <p>Laster …</p>

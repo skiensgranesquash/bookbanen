@@ -1,0 +1,19 @@
+# IF Skiens Grane Squash – bookbanen.no
+
+bookbanen.no er den offisielle bookingsiden for squashbanen til IF Skiens
+Grane, på Mova i Skien, Norge.
+
+## Hva siden gjør
+
+- Viser ledige tider på squashbanen, dag for dag.
+- Lar medlemmer booke og betale for en enkelttime (30 minutter eller 1 time)
+  eller en gjentakende ukentlig booking, med Vipps.
+
+## Hvem det er for
+
+Medlemmer av Skiens Grane Squash eller Mova Skien som ønsker å booke
+squashbanen. Det kreves medlemskap for å fullføre en booking.
+
+## Om klubben
+
+IF Skiens Grane, Mova, Skien, Norge.

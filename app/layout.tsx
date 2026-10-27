@@ -13,8 +13,26 @@ import type { ReactNode } from "react";
  * public/icon-512.png, public/apple-touch-icon.png) genereres på nytt for at
  * hjemskjerm-ikonet skal følge med (spør utvikleren/Claude om dette).
  */
+const SITE_URL = "https://bookbanen.no";
+const SITE_DESCRIPTION =
+  "Book og betal for squashbanen på Mova, Skien med Vipps – for medlemmer av IF Skiens Grane Squash og Mova Skien.";
+
 export const metadata: Metadata = {
-  title: "IF Skiens Grane – Squashbooking",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "IF Skiens Grane – Squashbooking",
+    template: "%s | IF Skiens Grane Squash",
+  },
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "squash",
+    "squashbane",
+    "booke squashbane",
+    "squash Skien",
+    "Mova Skien",
+    "IF Skiens Grane",
+    "squashklubb Telemark",
+  ],
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -27,6 +45,24 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "Squashbooking",
+  },
+  openGraph: {
+    type: "website",
+    locale: "nb_NO",
+    siteName: "IF Skiens Grane Squash",
+    url: SITE_URL,
+    title: "IF Skiens Grane – Squashbooking",
+    description: SITE_DESCRIPTION,
+    images: ["/logo-squash.JPG"],
+  },
+  twitter: {
+    card: "summary",
+    title: "IF Skiens Grane – Squashbooking",
+    description: SITE_DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 
