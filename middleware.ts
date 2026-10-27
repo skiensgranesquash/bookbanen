@@ -57,10 +57,24 @@ function isAllowedForBookingsOnly(pathname: string, isPage: boolean): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const isApi = pathname.startsWith("/api/");
   const isAdminApi = pathname.startsWith("/api/admin") && pathname !== "/api/admin/login";
   const isAdminPage = pathname.startsWith("/admin") && pathname !== "/admin/login";
 
-  if (!isAdminApi && !isAdminPage) return NextResponse.next();
+  // Legger alltid pa "ikke mellomlagre dette" for ALLE /api/-svar, uansett
+  // om det er en admin-rute eller ikke - en eventuell CDN/proxy foran selve
+  // Next.js-appen skal ALDRI cache svaret basert bare pa stien (og dermed
+  // ignorere f.eks. dato/klokkeslett/varighet i query-strengen) - det var
+  // nettopp det som gjorde at /api/squash/recurring-preview begynte a
+  // returnere det samme (feil, gamle) svaret uansett hvilken dato/uke/
+  // varighet som faktisk ble spurt om. Satt her, ETT sted, i stedet for i
+  // hver enkelt rute.
+  function noStore(response: NextResponse): NextResponse {
+    if (isApi) response.headers.set("Cache-Control", "no-store, must-revalidate");
+    return response;
+  }
+
+  if (!isAdminApi && !isAdminPage) return noStore(NextResponse.next());
 
   const cookieValue = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const session = await verifySessionCookieValue(cookieValue);
@@ -68,15 +82,17 @@ export async function middleware(request: NextRequest) {
   if (session) {
     if (session.role === "bookings_only" && !isAllowedForBookingsOnly(pathname, isAdminPage)) {
       if (isAdminApi) {
-        return NextResponse.json({ error: "Du har ikke tilgang til dette som begrenset administrator." }, { status: 403 });
+        return noStore(
+          NextResponse.json({ error: "Du har ikke tilgang til dette som begrenset administrator." }, { status: 403 })
+        );
       }
       return NextResponse.redirect(new URL("/admin", request.url));
     }
-    return NextResponse.next();
+    return noStore(NextResponse.next());
   }
 
   if (isAdminApi) {
-    return NextResponse.json({ error: "Ikke innlogget." }, { status: 401 });
+    return noStore(NextResponse.json({ error: "Ikke innlogget." }, { status: 401 }));
   }
 
   const loginUrl = new URL("/admin/login", request.url);
@@ -85,5 +101,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/:path*"],
 };
