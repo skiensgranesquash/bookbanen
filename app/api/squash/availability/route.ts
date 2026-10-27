@@ -52,16 +52,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ date: dateStr, slots: [], closed: true, note: null });
   }
 
+  // Starter oppryddingen av utløpte holds SAMTIDIG med åpningstid-oppslaget
+  // under (ikke rett etter) – de to spørringene er helt uavhengige av
+  // hverandre, så å vente ferdig på den ene før den andre i det hele tatt
+  // startet var bare unødvendig ekstra nettverks-ventetid på HVER ENKELT
+  // "hent ledige tider"-forespørsel. Selve databasetriggeren som holder
+  // blocks_time (brukt av findConflicts under) oppdatert kjører likevel i
+  // SAMME transaksjon som denne UPDATE-en, så korrektheten er uendret – vi
+  // sørger bare for at den er ferdig (se `await holdsCleanupPromise` under)
+  // før vi faktisk spør om ledighet. Feil her er ikke kritisk og skal
+  // aldri blokkere eller feile selve svaret, se .catch() under.
+  const holdsCleanupPromise = expireStaleHolds().catch((err) => {
+    console.error("[availability] kunne ikke rydde opp utløpte holds:", err);
+  });
+
   const hours = await getEffectiveHoursForDate(dateStr);
   if (hours.closed) {
+    await holdsCleanupPromise;
     return NextResponse.json({ date: dateStr, slots: [], closed: true, note: hours.note });
   }
 
-  try {
-    await expireStaleHolds();
-  } catch (err) {
-    console.error("[availability] kunne ikke rydde opp utløpte holds:", err);
-  }
+  await holdsCleanupPromise;
 
   const slots = generateSlotsForDate(dateStr, hours.intervals);
   if (slots.length === 0) {

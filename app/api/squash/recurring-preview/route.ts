@@ -50,11 +50,14 @@ export async function GET(request: NextRequest) {
   const duration = durationParam;
   const durationSlots = durationMinutesToSlots(duration);
 
-  try {
-    await expireStaleHolds();
-  } catch (err) {
+  // Starter oppryddingen av utløpte holds med én gang, SAMTIDIG med (ikke
+  // etter) de uavhengige oppslagene lenger ned – se samme resonnement i
+  // app/api/squash/availability/route.ts. Ventes først inn rett før
+  // findConflicts under, som er den eneste av dem som faktisk trenger at
+  // den er ferdig.
+  const holdsCleanupPromise = expireStaleHolds().catch((err) => {
     console.error("[recurring-preview] kunne ikke rydde opp utløpte holds:", err);
-  }
+  });
 
   const dates = generateWeeklyDates(date, weeks);
   const occurrences = dates.map((d) => ({ date: d, range: occurrenceRange(d, time, durationSlots) }));
@@ -73,13 +76,23 @@ export async function GET(request: NextRequest) {
   }
 
   const validOccurrences = occurrences as Array<{ date: string; range: { startTime: Date; endTime: Date } }>;
-  const [hoursContext, cutoffDate] = await Promise.all([getHoursContext(), getRecurringCutoffDate()]);
+  // Pricing hentes her, SAMMEN med de to andre uavhengige oppslagene, i
+  // stedet for helt til slutt (som før) – den trengs jo ikke før selve
+  // totalbeløpet skal regnes ut lenger ned, men den var uansett helt
+  // uavhengig av både konflikt-sjekken og åpningstid/grense-oppslagene, så
+  // å vente med å STARTE den til etter alt annet var bare bortkastet tid.
+  const [hoursContext, cutoffDate, pricing] = await Promise.all([
+    getHoursContext(),
+    getRecurringCutoffDate(),
+    getPricingSettings(),
+  ]);
 
   const repo = await getRepository();
   const ranges = validOccurrences.map((o) => ({
     startTime: o.range.startTime.toISOString(),
     endTime: o.range.endTime.toISOString(),
   }));
+  await holdsCleanupPromise;
   const conflicts = await repo.findConflicts(COURT_ID, ranges);
   const conflictStartTimes = new Set(conflicts.map((c) => c.startTime));
 
@@ -101,7 +114,6 @@ export async function GET(request: NextRequest) {
   });
 
   const allAvailable = occurrenceResults.every((o) => o.available);
-  const pricing = await getPricingSettings();
 
   return NextResponse.json({
     occurrences: occurrenceResults,
