@@ -15,7 +15,7 @@ import {
 import { nb } from "date-fns/locale";
 import styles from "./admin.module.css";
 import { formatOslo } from "@/lib/formatting";
-import { SLOT_LENGTH_MINUTES } from "@/lib/config";
+import { MAX_RECURRING_WEEKS, SLOT_LENGTH_MINUTES } from "@/lib/config";
 import { todayInClubTimeZone } from "@/lib/slots";
 import { useSlotMerging, type SlotVisualState } from "@/lib/useSlotMerging";
 import type { BookingRow } from "./AdminDashboard";
@@ -201,6 +201,15 @@ const CALENDAR_WEEKS = 5;
 export default function BookingsInsights({ bookings, onChanged, onCancel }: BookingsInsightsProps) {
   const [selectedDate, setSelectedDate] = useState(() => todayInClubTimeZone());
 
+  // Hvilken "side" av det faste CALENDAR_WEEKS-vinduet som vises - 0 er
+  // inneværende uke (standard ved hver innlasting). Admin kan bla fremover
+  // for å se/administrere gjentakende bookinger som strekker seg lenger fram
+  // enn standardvisningen (kunder kan booke serier opptil MAX_RECURRING_WEEKS
+  // uker fram i tid - se maxWindowPage under), og bla tilbake igjen til
+  // inneværende uke, men ikke lenger tilbake enn det (admin trenger ikke se
+  // historikk her - bookingslisten nederst har all historikk uansett).
+  const [windowPage, setWindowPage] = useState(0);
+
   const [modal, setModal] = useState<ModalState | null>(null);
   const [manualTime, setManualTime] = useState("");
   const [manualName, setManualName] = useState("");
@@ -382,11 +391,16 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
     return { day, week, month };
   }, [confirmedCustomerOccurrences]);
 
-  // Fast vindu – inneværende uke + de CALENDAR_WEEKS - 1 neste, ingen bla-
-  // funksjon (admin trenger ikke se tidligere uker). Vinduet forskyver seg
-  // automatisk fremover etter hvert som dagene passerer, siden det alltid
-  // regnes ut fra dagens dato på nytt ved hver rendring.
-  const windowStart = currentWeekStart();
+  // Vindu på CALENDAR_WEEKS uker, med inneværende uke (windowPage 0) som
+  // standard - forskyver seg automatisk fremover etter hvert som dagene
+  // passerer, siden det alltid regnes ut fra dagens dato på nytt ved hver
+  // rendring. Admin kan bla videre i hele CALENDAR_WEEKS-sider via
+  // windowPage, opptil maxWindowPage (se Forrige/Neste-knappene under) -
+  // det dekker hele spennet en gjentakende bookingserie kan nå
+  // (MAX_RECURRING_WEEKS), siden kunder ellers kunne booke uker admin ikke
+  // hadde noen måte å se eller administrere fra denne kalenderen.
+  const maxWindowPage = Math.max(0, Math.floor((MAX_RECURRING_WEEKS - 1) / CALENDAR_WEEKS));
+  const windowStart = addDays(currentWeekStart(), windowPage * CALENDAR_WEEKS * 7);
   const windowEnd = addDays(windowStart, CALENDAR_WEEKS * 7 - 1);
   const days = eachDayOfInterval({ start: windowStart, end: windowEnd });
   const today = new Date();
@@ -597,8 +611,33 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
       <div className={styles.calendarAgendaRow}>
         <div className={styles.bcWrap}>
           <div className={styles.calHeader}>
+            <button
+              type="button"
+              className={styles.calNav}
+              onClick={() => setWindowPage((p) => Math.max(0, p - 1))}
+              disabled={windowPage <= 0}
+              aria-label="Forrige periode"
+            >
+              ‹
+            </button>
             <span className={styles.calTitle}>{weekRangeLabel}</span>
+            <button
+              type="button"
+              className={styles.calNav}
+              onClick={() => setWindowPage((p) => Math.min(maxWindowPage, p + 1))}
+              disabled={windowPage >= maxWindowPage}
+              aria-label="Neste periode"
+            >
+              ›
+            </button>
           </div>
+          {windowPage > 0 && (
+            <div style={{ textAlign: "center", marginBottom: 6 }}>
+              <button type="button" className={styles.linkButton} onClick={() => setWindowPage(0)}>
+                Tilbake til i dag
+              </button>
+            </div>
+          )}
 
           <div className={styles.calWeekdays}>
             {CAL_WEEKDAY_HEADERS.map((w) => (
