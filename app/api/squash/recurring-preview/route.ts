@@ -4,11 +4,12 @@ import { expireStaleHolds } from "@/lib/holds";
 import { COURT_ID, durationMinutesToSlots, isBookableDurationMinutes, MAX_RECURRING_WEEKS } from "@/lib/config";
 import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHours";
 import { getPricingSettings, priceForDuration } from "@/lib/settings/pricing";
-import { getRecurringCutoffDate } from "@/lib/settings/recurringLimit";
+import { getRecurringCutoffDate, getRecurringMaxWeeks } from "@/lib/settings/recurringLimit";
 import {
   generateWeeklyDates,
   isWithinOpeningHours,
   isValidBookingDateString,
+  maxRecurringWeeksUntil,
   occurrenceRange,
   todayInClubTimeZone,
 } from "@/lib/slots";
@@ -81,11 +82,13 @@ export async function GET(request: NextRequest) {
   // totalbeløpet skal regnes ut lenger ned, men den var uansett helt
   // uavhengig av både konflikt-sjekken og åpningstid/grense-oppslagene, så
   // å vente med å STARTE den til etter alt annet var bare bortkastet tid.
-  const [hoursContext, cutoffDate, pricing] = await Promise.all([
+  const [hoursContext, cutoffDate, maxWeeksSetting, pricing] = await Promise.all([
     getHoursContext(),
     getRecurringCutoffDate(),
+    getRecurringMaxWeeks(),
     getPricingSettings(),
   ]);
+  const maxWeeksEffective = maxRecurringWeeksUntil(date, cutoffDate, maxWeeksSetting);
 
   const repo = await getRepository();
   const ranges = validOccurrences.map((o) => ({
@@ -96,12 +99,12 @@ export async function GET(request: NextRequest) {
   const conflicts = await repo.findConflicts(COURT_ID, ranges);
   const conflictStartTimes = new Set(conflicts.map((c) => c.startTime));
 
-  const occurrenceResults = validOccurrences.map((o) => {
+  const occurrenceResults = validOccurrences.map((o, i) => {
     const hours = effectiveHoursForDate(o.date, hoursContext);
     const withinHours = isWithinOpeningHours(o.range.startTime, o.range.endTime, hours);
     const taken = conflictStartTimes.has(o.range.startTime.toISOString());
-    const beyondCutoff = !!cutoffDate && o.date > cutoffDate;
-    const closed = !withinHours || beyondCutoff;
+    const beyondLimit = i >= maxWeeksEffective;
+    const closed = !withinHours || beyondLimit;
 
     return {
       date: o.date,
@@ -109,7 +112,7 @@ export async function GET(request: NextRequest) {
       endTime: o.range.endTime.toISOString(),
       available: closed ? false : !taken,
       reason: closed ? ("closed" as const) : taken ? ("taken" as const) : null,
-      note: beyondCutoff ? "Etter siste dato for gjentakende bookinger (satt av klubben)" : !withinHours ? hours.note : null,
+      note: beyondLimit ? "Etter grensen for gjentakende bookinger (satt av klubben)" : !withinHours ? hours.note : null,
     };
   });
 

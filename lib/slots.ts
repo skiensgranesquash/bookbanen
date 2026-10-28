@@ -274,8 +274,15 @@ export function generateWeeklyDates(firstDate: string, weeks: number): string[] 
  * Samme rene UTC-millisekund-aritmetikk som generateWeeklyDates over, av
  * samme grunn (tidssone-uavhengig datoregning).
  */
-export function maxRecurringWeeksUntil(firstDate: string, cutoffDate: string | null): number {
-  if (!cutoffDate) return MAX_RECURRING_WEEKS;
+export function maxRecurringWeeksUntil(
+  firstDate: string,
+  cutoffDate: string | null,
+  maxWeeksSetting: number | null = null
+): number {
+  const configuredCap =
+    maxWeeksSetting != null ? Math.max(0, Math.min(MAX_RECURRING_WEEKS, maxWeeksSetting)) : MAX_RECURRING_WEEKS;
+
+  if (!cutoffDate) return configuredCap;
 
   const [fy, fm, fd] = firstDate.split("-").map(Number);
   const [cy, cm, cd] = cutoffDate.split("-").map(Number);
@@ -284,5 +291,5 @@ export function maxRecurringWeeksUntil(firstDate: string, cutoffDate: string | n
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
   const weeksUntilCutoff = Math.floor((cutoffMs - firstMs) / WEEK_MS) + 1;
-  return Math.max(0, Math.min(MAX_RECURRING_WEEKS, weeksUntilCutoff));
+  return Math.max(0, Math.min(configuredCap, weeksUntilCutoff));
 }

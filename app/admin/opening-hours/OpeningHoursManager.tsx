@@ -153,6 +153,14 @@ export default function OpeningHoursManager() {
   const [savingCutoff, setSavingCutoff] = useState(false);
   const [cutoffMessage, setCutoffMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Maks antall uker i en serie (se lib/settings/recurringLimit.ts) – egen
+  // delvis-uavhengig skjema i samme kort, men samme GET/POST-endepunkt som
+  // datoen over (se useEffect-en og handleSaveMaxWeeks/handleClearMaxWeeks
+  // under). Deler cutoffLoading som felles last-tilstand for begge skjemaene.
+  const [maxWeeks, setMaxWeeks] = useState("");
+  const [savingMaxWeeks, setSavingMaxWeeks] = useState(false);
+  const [maxWeeksMessage, setMaxWeeksMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
   // Priser for 30 min/1 time (se lib/settings/pricing.ts) – holdt som tekst
   // (kr, med evt. komma/desimal) i selve input-feltene mens man skriver, og
   // konvertert til øre først når man faktisk lagrer.
@@ -196,11 +204,14 @@ export default function OpeningHoursManager() {
     fetch("/api/admin/settings/recurring-limit", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error("Kunne ikke hente grensen.");
-        return res.json() as Promise<{ cutoffDate: string | null }>;
+        return res.json() as Promise<{ cutoffDate: string | null; maxWeeks: number | null }>;
       })
-      .then((data) => setCutoffDate(data.cutoffDate ?? ""))
+      .then((data) => {
+        setCutoffDate(data.cutoffDate ?? "");
+        setMaxWeeks(data.maxWeeks != null ? String(data.maxWeeks) : "");
+      })
       .catch(() => {
-        // Ikke kritisk nok til å blokkere resten av siden – feltet starter bare tomt.
+        // Ikke kritisk nok til å blokkere resten av siden – feltene starter bare tomme.
       })
       .finally(() => setCutoffLoading(false));
   }, []);
@@ -283,6 +294,55 @@ export default function OpeningHoursManager() {
       setCutoffMessage({ ok: false, text: "Kunne ikke fjerne akkurat nå." });
     } finally {
       setSavingCutoff(false);
+    }
+  }
+
+  async function handleSaveMaxWeeks(e: FormEvent) {
+    e.preventDefault();
+    setSavingMaxWeeks(true);
+    setMaxWeeksMessage(null);
+
+    try {
+      const res = await fetch("/api/admin/settings/recurring-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxWeeks: maxWeeks ? Number(maxWeeks) : null }),
+      });
+      const data = (await res.json()) as { error?: string; maxWeeks?: number | null };
+      if (!res.ok) {
+        setMaxWeeksMessage({ ok: false, text: data.error ?? "Kunne ikke lagre." });
+        return;
+      }
+      setMaxWeeks(data.maxWeeks != null ? String(data.maxWeeks) : "");
+      setMaxWeeksMessage({ ok: true, text: "Antall uker lagret." });
+    } catch {
+      setMaxWeeksMessage({ ok: false, text: "Kunne ikke lagre akkurat nå." });
+    } finally {
+      setSavingMaxWeeks(false);
+    }
+  }
+
+  async function handleClearMaxWeeks() {
+    setSavingMaxWeeks(true);
+    setMaxWeeksMessage(null);
+
+    try {
+      const res = await fetch("/api/admin/settings/recurring-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxWeeks: null }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setMaxWeeksMessage({ ok: false, text: data.error ?? "Kunne ikke tilbakestille." });
+        return;
+      }
+      setMaxWeeks("");
+      setMaxWeeksMessage({ ok: true, text: `Tilbakestilt til ${MAX_RECURRING_WEEKS} uker.` });
+    } catch {
+      setMaxWeeksMessage({ ok: false, text: "Kunne ikke tilbakestille akkurat nå." });
+    } finally {
+      setSavingMaxWeeks(false);
     }
   }
 
@@ -483,11 +543,6 @@ export default function OpeningHoursManager() {
           når datoen nærmer seg (siste uke før den passerer), og hver dag etter at den har passert – helt til du
           setter en ny dato. La feltet stå tomt for å kun bruke det vanlige maks-antallet uker.
         </p>
-        <p className={styles.bookingMeta}>
-          Maks antall bookinger i én serie er uansett {MAX_RECURRING_WEEKS} uker (ca. et halvt år) – det er en fast,
-          teknisk grense i koden og kan ikke endres herfra. Denne datoen kan bare gjøre grensen KORTERE, aldri lengre
-          enn det.
-        </p>
         {cutoffLoading ? (
           <p>Laster …</p>
         ) : (
@@ -515,6 +570,48 @@ export default function OpeningHoursManager() {
                 onClick={handleClearCutoff}
               >
                 Fjern grense
+              </button>
+            </div>
+          </form>
+        )}
+
+        <h3 style={{ marginTop: 20, marginBottom: 4, fontSize: "0.95rem" }}>Maks antall uker i en serie</h3>
+        <p className={styles.bookingMeta}>
+          Uansett hva datoen over sier, kan en enkelt serie heller ikke vare lenger enn dette antallet uker – den
+          STRENGESTE av de to grensene gjelder. La feltet stå tomt for å gå tilbake til det vanlige maks-antallet
+          ({MAX_RECURRING_WEEKS} uker).
+        </p>
+        {cutoffLoading ? (
+          <p>Laster …</p>
+        ) : (
+          <form onSubmit={handleSaveMaxWeeks} className={styles.form}>
+            <div className={styles.formRow}>
+              <label htmlFor="recurring-max-weeks">Maks antall uker</label>
+              <input
+                id="recurring-max-weeks"
+                type="number"
+                min={1}
+                max={MAX_RECURRING_WEEKS}
+                value={maxWeeks}
+                onChange={(e) => setMaxWeeks(e.target.value)}
+              />
+            </div>
+
+            {maxWeeksMessage && (
+              <p className={maxWeeksMessage.ok ? styles.success : styles.error}>{maxWeeksMessage.text}</p>
+            )}
+
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <button type="submit" className={styles.submitButton} disabled={savingMaxWeeks || !maxWeeks}>
+                {savingMaxWeeks ? "Lagrer …" : "Lagre"}
+              </button>
+              <button
+                type="button"
+                className={styles.dangerButton}
+                disabled={savingMaxWeeks || !maxWeeks}
+                onClick={handleClearMaxWeeks}
+              >
+                Tilbakestill til {MAX_RECURRING_WEEKS}
               </button>
             </div>
           </form>

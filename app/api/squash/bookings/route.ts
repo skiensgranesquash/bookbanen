@@ -7,6 +7,7 @@ import {
   isDateBookable,
   isValidBookingDateString,
   isWithinOpeningHours,
+  maxRecurringWeeksUntil,
   occurrenceRange,
   todayInClubTimeZone,
 } from "@/lib/slots";
@@ -23,7 +24,7 @@ import { formatDurationMinutes } from "@/lib/formatting";
 import { getPaymentProviderImpl } from "@/lib/payments";
 import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHours";
 import { getPricingSettings, priceForDuration } from "@/lib/settings/pricing";
-import { getRecurringCutoffDate } from "@/lib/settings/recurringLimit";
+import { getRecurringCutoffDate, getRecurringMaxWeeks } from "@/lib/settings/recurringLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -110,11 +111,17 @@ export async function POST(request: NextRequest) {
   // bare i forhåndsvisningen kunden så FØR betaling), siden dette er den
   // ekte, atomiske opprettelsen.
   if (mode === "recurring") {
-    const cutoffDate = await getRecurringCutoffDate();
-    if (cutoffDate && dates.some((d) => d > cutoffDate)) {
+    const [cutoffDate, maxWeeksSetting] = await Promise.all([getRecurringCutoffDate(), getRecurringMaxWeeks()]);
+    const maxWeeksEffective = maxRecurringWeeksUntil(date, cutoffDate, maxWeeksSetting);
+    if (weeks > maxWeeksEffective) {
       return NextResponse.json(
         {
-          error: `Rekken går forbi siste tillatte dato for gjentakende bookinger (${cutoffDate}) – juster antall uker eller startdato.`,
+          error:
+            maxWeeksEffective > 0
+              ? `Rekken er for lang – maks ${maxWeeksEffective} ${
+                  maxWeeksEffective === 1 ? "uke" : "uker"
+                } er tillatt fra denne startdatoen (grense satt av klubben). Juster antall uker eller startdato.`
+              : "Det er ikke lenger mulig å starte en gjentakende rekke fra denne datoen (grense satt av klubben).",
         },
         { status: 400 }
       );

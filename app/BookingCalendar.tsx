@@ -109,12 +109,19 @@ function writeRemembered(key: string, value: string) {
 interface BookingCalendarProps {
   /** Siste dato en gjentakende booking har lov til å dekke (satt av klubben i adminpanelet), eller null for ingen egen grense – se lib/settings/recurringLimit.ts. */
   recurringCutoffDate: string | null;
+  /** Maks antall uker i en enkelt serie (satt av klubben i adminpanelet), eller null for ingen egen grense (da gjelder kun MAX_RECURRING_WEEKS) – se lib/settings/recurringLimit.ts. Denne og recurringCutoffDate er to UAVHENGIGE grenser som begge gjelder samtidig (den strengeste vinner). */
+  recurringMaxWeeks: number | null;
   /** Dagens priser (i øre), satt av klubben i adminpanelet – se lib/settings/pricing.ts. De to er HELT uavhengige av hverandre (1 time er ikke nødvendigvis dobbelt så dyrt som 30 min). */
   price30MinOre: number;
   price60MinOre: number;
 }
 
-export default function BookingCalendar({ recurringCutoffDate, price30MinOre, price60MinOre }: BookingCalendarProps) {
+export default function BookingCalendar({
+  recurringCutoffDate,
+  recurringMaxWeeks,
+  price30MinOre,
+  price60MinOre,
+}: BookingCalendarProps) {
   const today = useMemo(() => todayInClubTimeZone(), []);
   const maxDate = useMemo(() => maxBookableDate(), []);
 
@@ -153,8 +160,8 @@ export default function BookingCalendar({ recurringCutoffDate, price30MinOre, pr
   // først i forhåndsvisningen (eller enda verre: etter betaling).
   const recurringAllowed = !recurringCutoffDate || date <= recurringCutoffDate;
   const maxWeeksAllowed = useMemo(
-    () => maxRecurringWeeksUntil(date, recurringCutoffDate),
-    [date, recurringCutoffDate]
+    () => maxRecurringWeeksUntil(date, recurringCutoffDate, recurringMaxWeeks),
+    [date, recurringCutoffDate, recurringMaxWeeks]
   );
 
   // Skru av "gjentakende" igjen hvis datoen endres til noe forbi grensen

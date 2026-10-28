@@ -1,21 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRecurringCutoffDate, saveRecurringCutoffDate } from "@/lib/settings/recurringLimit";
+import {
+  getRecurringCutoffDate,
+  getRecurringMaxWeeks,
+  saveRecurringCutoffDate,
+  saveRecurringMaxWeeks,
+} from "@/lib/settings/recurringLimit";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET  /api/admin/settings/recurring-limit – hent siste dato for gjentakende
- *      bookinger (`cutoffDate: null` betyr at ingen egen dato er satt).
- * POST /api/admin/settings/recurring-limit – sett (eller fjern, med
- *      `cutoffDate: null`) denne datoen.
+ * GET  /api/admin/settings/recurring-limit - hent både siste dato for
+ *      gjentakende bookinger OG maks antall uker i en serie (`null` betyr at
+ *      den aktuelle grensen ikke er satt).
+ * POST /api/admin/settings/recurring-limit - sett (eller fjern, med `null`)
+ *      ÉN av de to - body sender bare det feltet som faktisk endres (det
+ *      andre feltet røres ikke, og trenger ikke være med i det hele tatt).
  *
- * Beskyttet av middleware.ts som resten av /api/admin/** – krever gyldig
+ * Beskyttet av middleware.ts som resten av /api/admin/** - krever gyldig
  * admin-sesjon.
  */
 export async function GET() {
   try {
-    const cutoffDate = await getRecurringCutoffDate();
-    return NextResponse.json({ cutoffDate });
+    const [cutoffDate, maxWeeks] = await Promise.all([getRecurringCutoffDate(), getRecurringMaxWeeks()]);
+    return NextResponse.json({ cutoffDate, maxWeeks });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Kunne ikke hente grensen." },
@@ -26,6 +33,7 @@ export async function GET() {
 
 interface SaveBody {
   cutoffDate?: string | null;
+  maxWeeks?: number | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -37,8 +45,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const cutoffDate = await saveRecurringCutoffDate(body.cutoffDate ?? null);
-    return NextResponse.json({ ok: true, cutoffDate });
+    const touchesCutoff = Object.prototype.hasOwnProperty.call(body, "cutoffDate");
+    const touchesMaxWeeks = Object.prototype.hasOwnProperty.call(body, "maxWeeks");
+
+    if (touchesCutoff) await saveRecurringCutoffDate(body.cutoffDate ?? null);
+    if (touchesMaxWeeks) await saveRecurringMaxWeeks(body.maxWeeks ?? null);
+
+    const [cutoffDate, maxWeeks] = await Promise.all([getRecurringCutoffDate(), getRecurringMaxWeeks()]);
+    return NextResponse.json({ ok: true, cutoffDate, maxWeeks });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Kunne ikke lagre." }, { status: 400 });
   }

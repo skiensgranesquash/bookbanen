@@ -5,7 +5,7 @@ import styles from "./booking.module.css";
 import { VENUE_NAME } from "@/lib/config";
 import { getBranding } from "@/lib/settings/branding";
 import { getPricingSettings } from "@/lib/settings/pricing";
-import { getRecurringCutoffDate } from "@/lib/settings/recurringLimit";
+import { getRecurringCutoffDate, getRecurringMaxWeeks } from "@/lib/settings/recurringLimit";
 
 // Uten denne blir siden statisk forhåndsrenderet ved BUILD-tidspunktet (Next.js
 // ser ingen "dynamisk" API-bruk her, bare rene databaseoppslag) – da fryses
@@ -43,9 +43,10 @@ export async function generateMetadata(): Promise<Metadata> {
  * for en annen klubb/bedrift.
  */
 export default async function SquashBookingPage() {
-  const [branding, recurringCutoffDate, pricing] = await Promise.all([
+  const [branding, recurringCutoffDate, recurringMaxWeeks, pricing] = await Promise.all([
     getBranding(),
     getRecurringCutoffDate(),
+    getRecurringMaxWeeks(),
     getPricingSettings(),
   ]);
 
@@ -103,6 +104,7 @@ export default async function SquashBookingPage() {
 
       <BookingCalendar
         recurringCutoffDate={recurringCutoffDate}
+        recurringMaxWeeks={recurringMaxWeeks}
         price30MinOre={pricing.price30MinOre}
         price60MinOre={pricing.price60MinOre}
       />

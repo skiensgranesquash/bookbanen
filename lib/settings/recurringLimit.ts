@@ -1,6 +1,7 @@
 import "server-only";
 import { getRepository } from "@/lib/db";
 import { isValidDateString } from "./openingHours";
+import { MAX_RECURRING_WEEKS } from "@/lib/config";
 
 /**
  * Siste dato en gjentakende (ukentlig) booking har lov til å dekke – satt av
@@ -52,4 +53,47 @@ export async function saveRecurringCutoffDate(dateStr: string | null): Promise<s
 
   await repo.setSetting(CUTOFF_DATE_KEY, dateStr);
   return dateStr;
+}
+
+/**
+ * Maks antall uker en enkelt gjentakende serie har lov til å ha, satt av
+ * klubben i adminpanelet (se app/admin/opening-hours/OpeningHoursManager.tsx,
+ * kortet "Grense for gjentakende bookinger") - lagret på samme måte som
+ * CUTOFF_DATE_KEY over. `null` betyr at ingen egen grense er satt - da
+ * gjelder kun MAX_RECURRING_WEEKS (teknisk tak), akkurat som før denne
+ * innstillingen fantes.
+ *
+ * Denne grensen og CUTOFF_DATE_KEY over er to UAVHENGIGE grenser som begge
+ * gjelder samtidig - systemet bruker alltid den STRENGESTE av de to (se
+ * maxRecurringWeeksUntil i lib/slots.ts), akkurat som MAX_RECURRING_WEEKS
+ * uansett er et absolutt tak ingen av dem kan overstyre.
+ */
+const MAX_WEEKS_KEY = "recurringMaxWeeksLimit";
+
+export async function getRecurringMaxWeeks(): Promise<number | null> {
+  const repo = await getRepository();
+  const raw = await repo.getSetting(MAX_WEEKS_KEY);
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= MAX_RECURRING_WEEKS ? n : null;
+}
+
+/**
+ * `weeks: null` fjerner grensen igjen (tilbake til kun MAX_RECURRING_WEEKS).
+ * Kaster med en norsk feilmelding ved et ugyldig antall.
+ */
+export async function saveRecurringMaxWeeks(weeks: number | null): Promise<number | null> {
+  const repo = await getRepository();
+
+  if (weeks === null) {
+    await repo.setSetting(MAX_WEEKS_KEY, "");
+    return null;
+  }
+
+  if (!Number.isInteger(weeks) || weeks < 1 || weeks > MAX_RECURRING_WEEKS) {
+    throw new Error(`Ugyldig antall uker (må være et helt tall mellom 1 og ${MAX_RECURRING_WEEKS}).`);
+  }
+
+  await repo.setSetting(MAX_WEEKS_KEY, String(weeks));
+  return weeks;
 }
