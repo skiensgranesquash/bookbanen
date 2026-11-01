@@ -235,26 +235,21 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
 
   const [agendaBusyId, setAgendaBusyId] = useState<string | null>(null);
 
-  // Rask blokkering av HELE den valgte dagen – vises over avtalelisten til
-  // høyre for kalenderen, og gjelder alltid akkurat `selectedDate` (oppdaterer
-  // seg selv når du klikker en annen dag i kalenderen).
-  const [quickWholeDay, setQuickWholeDay] = useState(true);
-  const [quickStart, setQuickStart] = useState("");
-  const [quickEnd, setQuickEnd] = useState("");
-  const [quickNote, setQuickNote] = useState("");
-  const [quickSubmitting, setQuickSubmitting] = useState(false);
-  const [quickError, setQuickError] = useState<string | null>(null);
-
-  // Blokkering over flere dager på rad (samme klokkeslett – eller hele dagen
-  // – hver dag i rekken) – vises som en smal stripe under kalenderen.
-  const [rangeFromDate, setRangeFromDate] = useState("");
-  const [rangeToDate, setRangeToDate] = useState("");
-  const [rangeWholeDay, setRangeWholeDay] = useState(true);
-  const [rangeStart, setRangeStart] = useState("");
-  const [rangeEnd, setRangeEnd] = useState("");
-  const [rangeNote, setRangeNote] = useState("");
-  const [rangeSubmitting, setRangeSubmitting] = useState(false);
-  const [rangeError, setRangeError] = useState<string | null>(null);
+  // Blokkering av tid - ÉN boks der admin velger om det gjelder én dag
+  // (alltid `selectedDate`, dagen som er klikket i kalenderen over) eller
+  // flere dager på rad (samme klokkeslett - eller hele dagen - hver dag i
+  // rekken fra og med `selectedDate`), og om det gjelder hele dagen eller et
+  // valgt klokkeslett. Var tidligere to separate skjemaer (ett for rask
+  // blokkering av én dag, ett for flere dager på rad); nå er det ett
+  // skjema, med et valg for omfang øverst i stedet.
+  const [blockScope, setBlockScope] = useState<"single" | "range">("single");
+  const [blockToDate, setBlockToDate] = useState("");
+  const [blockWholeDay, setBlockWholeDay] = useState(true);
+  const [blockStart, setBlockStart] = useState("");
+  const [blockEnd, setBlockEnd] = useState("");
+  const [blockNote, setBlockNote] = useState("");
+  const [blockSubmitting, setBlockSubmitting] = useState(false);
+  const [blockError, setBlockError] = useState<string | null>(null);
 
   // Trenger en slot-oversikt (akkurat som den offentlige bookingsiden) når vi
   // oppretter en ny booking, ELLER redigerer klokkeslettet på en eksisterende
@@ -482,53 +477,29 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
     }
   }
 
-  async function handleQuickBlockSubmit(e: FormEvent) {
+  async function handleBlockSubmit(e: FormEvent) {
     e.preventDefault();
-    setQuickSubmitting(true);
-    setQuickError(null);
+    setBlockSubmitting(true);
+    setBlockError(null);
     const err = await submitBlock({
       fromDate: selectedDate,
-      toDate: selectedDate,
-      wholeDay: quickWholeDay,
-      startTime: quickWholeDay ? undefined : quickStart,
-      endTime: quickWholeDay ? undefined : quickEnd,
-      note: quickNote,
+      toDate: blockScope === "range" ? blockToDate || selectedDate : selectedDate,
+      wholeDay: blockWholeDay,
+      startTime: blockWholeDay ? undefined : blockStart,
+      endTime: blockWholeDay ? undefined : blockEnd,
+      note: blockNote,
     });
-    setQuickSubmitting(false);
+    setBlockSubmitting(false);
     if (err) {
-      setQuickError(err);
+      setBlockError(err);
       return;
     }
-    setQuickWholeDay(true);
-    setQuickStart("");
-    setQuickEnd("");
-    setQuickNote("");
-    onChanged();
-  }
-
-  async function handleRangeBlockSubmit(e: FormEvent) {
-    e.preventDefault();
-    setRangeSubmitting(true);
-    setRangeError(null);
-    const err = await submitBlock({
-      fromDate: rangeFromDate,
-      toDate: rangeToDate || rangeFromDate,
-      wholeDay: rangeWholeDay,
-      startTime: rangeWholeDay ? undefined : rangeStart,
-      endTime: rangeWholeDay ? undefined : rangeEnd,
-      note: rangeNote,
-    });
-    setRangeSubmitting(false);
-    if (err) {
-      setRangeError(err);
-      return;
-    }
-    setRangeFromDate("");
-    setRangeToDate("");
-    setRangeWholeDay(true);
-    setRangeStart("");
-    setRangeEnd("");
-    setRangeNote("");
+    setBlockScope("single");
+    setBlockToDate("");
+    setBlockWholeDay(true);
+    setBlockStart("");
+    setBlockEnd("");
+    setBlockNote("");
     onChanged();
   }
 
@@ -753,144 +724,112 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
             </span>
           </div>
 
-          <form onSubmit={handleRangeBlockSubmit} className={styles.blockStrip}>
-            <div className={styles.blockStripTitle}>Blokker flere dager på rad</div>
+          <form onSubmit={handleBlockSubmit} className={styles.blockStrip}>
+            <div className={styles.blockStripTitle}>
+              Blokker{" "}
+              {blockScope === "single"
+                ? format(parseDateOnly(selectedDate), "EEEE d. MMMM", { locale: nb })
+                : "flere dager på rad"}
+            </div>
+
+            <div className={styles.durationToggle} style={{ marginBottom: 10 }}>
+              <button
+                type="button"
+                className={`${styles.durationToggleButton} ${
+                  blockScope === "single" ? styles.durationToggleButtonActive : ""
+                }`}
+                onClick={() => setBlockScope("single")}
+              >
+                Én dag
+              </button>
+              <button
+                type="button"
+                className={`${styles.durationToggleButton} ${
+                  blockScope === "range" ? styles.durationToggleButtonActive : ""
+                }`}
+                onClick={() => setBlockScope("range")}
+              >
+                Flere dager på rad
+              </button>
+            </div>
+
             <div className={styles.inlineFields}>
+              {blockScope === "range" && (
+                <div>
+                  <label htmlFor="block-to">
+                    Fra {format(parseDateOnly(selectedDate), "d. MMM", { locale: nb })} til og med
+                  </label>
+                  <input
+                    id="block-to"
+                    type="date"
+                    required
+                    value={blockToDate}
+                    min={selectedDate}
+                    onChange={(e) => setBlockToDate(e.target.value)}
+                  />
+                </div>
+              )}
               <div>
-                <label htmlFor="range-from">Fra dato</label>
-                <input
-                  id="range-from"
-                  type="date"
-                  required
-                  value={rangeFromDate}
-                  onChange={(e) => setRangeFromDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="range-to">Til dato</label>
-                <input
-                  id="range-to"
-                  type="date"
-                  value={rangeToDate}
-                  min={rangeFromDate || undefined}
-                  onChange={(e) => setRangeToDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={styles.checkboxOption} style={{ marginTop: "20px" }}>
+                <label
+                  className={styles.checkboxOption}
+                  style={{ marginTop: blockScope === "range" ? "20px" : 0 }}
+                >
                   <input
                     type="checkbox"
-                    checked={rangeWholeDay}
-                    onChange={(e) => setRangeWholeDay(e.target.checked)}
+                    checked={blockWholeDay}
+                    onChange={(e) => setBlockWholeDay(e.target.checked)}
                   />
                   Hele dagen
                 </label>
               </div>
-              {!rangeWholeDay && (
+              {!blockWholeDay && (
                 <>
                   <div>
-                    <label htmlFor="range-start">Fra kl.</label>
+                    <label htmlFor="block-start">Fra kl.</label>
                     <input
-                      id="range-start"
+                      id="block-start"
                       type="time"
-                      value={rangeStart}
-                      onChange={(e) => setRangeStart(e.target.value)}
+                      value={blockStart}
+                      onChange={(e) => setBlockStart(e.target.value)}
                     />
                   </div>
                   <div>
-                    <label htmlFor="range-end">Til kl.</label>
+                    <label htmlFor="block-end">Til kl.</label>
                     <input
-                      id="range-end"
+                      id="block-end"
                       type="time"
-                      value={rangeEnd}
-                      onChange={(e) => setRangeEnd(e.target.value)}
+                      value={blockEnd}
+                      onChange={(e) => setBlockEnd(e.target.value)}
                     />
                   </div>
                 </>
               )}
               <div>
-                <label htmlFor="range-note">Forklaring</label>
+                <label htmlFor="block-note">Forklaring</label>
                 <input
-                  id="range-note"
+                  id="block-note"
                   type="text"
                   maxLength={200}
-                  value={rangeNote}
-                  onChange={(e) => setRangeNote(e.target.value)}
+                  value={blockNote}
+                  onChange={(e) => setBlockNote(e.target.value)}
                   placeholder="F.eks. vedlikehold, turnering …"
                 />
               </div>
             </div>
-            {rangeError && <p className={styles.error}>{rangeError}</p>}
+            {blockError && <p className={styles.error}>{blockError}</p>}
             <button
               type="submit"
               className={styles.submitButton}
               disabled={
-                rangeSubmitting ||
-                !rangeFromDate ||
-                !rangeNote.trim() ||
-                (!rangeWholeDay && (!rangeStart || !rangeEnd))
+                blockSubmitting ||
+                !blockNote.trim() ||
+                (!blockWholeDay && (!blockStart || !blockEnd)) ||
+                (blockScope === "range" && !blockToDate)
               }
             >
-              {rangeSubmitting ? "Blokkerer …" : "Blokker"}
+              {blockSubmitting ? "Blokkerer …" : blockScope === "range" ? "Blokker dagene" : "Blokker dagen"}
             </button>
           </form>
-
-          <div className={styles.quickBlockBox}>
-            <h3 style={{ marginTop: 0, fontSize: "1rem" }}>
-              Blokker {format(parseDateOnly(selectedDate), "EEEE d. MMMM", { locale: nb })}
-            </h3>
-            <form onSubmit={handleQuickBlockSubmit} className={styles.form}>
-              <label className={styles.checkboxOption}>
-                <input
-                  type="checkbox"
-                  checked={quickWholeDay}
-                  onChange={(e) => setQuickWholeDay(e.target.checked)}
-                />
-                Hele dagen
-              </label>
-              {!quickWholeDay && (
-                <div className={styles.inlineFields}>
-                  <div>
-                    <label htmlFor="quick-start">Fra</label>
-                    <input
-                      id="quick-start"
-                      type="time"
-                      value={quickStart}
-                      onChange={(e) => setQuickStart(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="quick-end">Til</label>
-                    <input
-                      id="quick-end"
-                      type="time"
-                      value={quickEnd}
-                      onChange={(e) => setQuickEnd(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-              <div className={styles.formRow}>
-                <label htmlFor="quick-note">Forklaring</label>
-                <input
-                  id="quick-note"
-                  type="text"
-                  maxLength={200}
-                  value={quickNote}
-                  onChange={(e) => setQuickNote(e.target.value)}
-                  placeholder="F.eks. vedlikehold, turnering …"
-                />
-              </div>
-              {quickError && <p className={styles.error}>{quickError}</p>}
-              <button
-                type="submit"
-                className={styles.submitButton}
-                disabled={quickSubmitting || !quickNote.trim() || (!quickWholeDay && (!quickStart || !quickEnd))}
-              >
-                {quickSubmitting ? "Blokkerer …" : "Blokker dagen"}
-              </button>
-            </form>
-          </div>
         </div>
 
         <div className={styles.agendaPanel}>
