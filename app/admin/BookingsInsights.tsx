@@ -212,6 +212,11 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
 
   const [modal, setModal] = useState<ModalState | null>(null);
   const [manualTime, setManualTime] = useState("");
+  // Varighet for en NY manuell booking (kun relevant i "create"-modus – en
+  // redigering beholder alltid bookingens egen, opprinnelige varighet, se
+  // modalDurationMinutes under). 60 min er fortsatt forhåndsvalgt, akkurat
+  // som før dette ble valgbart.
+  const [manualDurationMinutes, setManualDurationMinutes] = useState<30 | 60>(60);
   const [manualName, setManualName] = useState("");
   const [manualPhone, setManualPhone] = useState("");
   const [manualSubmitting, setManualSubmitting] = useState(false);
@@ -263,14 +268,15 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
   // vises inni modalen når needsSlotGrid && modalSlots har innhold.
   const effectiveModalSlots = modalSlots ?? [];
 
-  // Admin sin manuelle booking er alltid nøyaktig 1 time når man OPPRETTER en
-  // ny (se app/api/admin/bookings/manual/route.ts) – men når man REDIGERER en
-  // eksisterende booking sitt klokkeslett, beholdes bookingens EGEN,
-  // opprinnelige varighet (30 min eller 1 time, se
-  // app/api/admin/bookings/[id]/route.ts), så rutenettet må vite hvilken av
-  // de to det gjelder, både for hvilke celler som er valgbare OG om valget
-  // skal vises som én eller to sammenslåtte halvtimer.
-  const modalDurationMinutes = modal === null ? 60 : modal.mode === "create" ? 60 : modal.durationMinutes;
+  // Admin sin manuelle booking har samme to valg som en vanlig booking (30
+  // min eller 1 time, se durationToggle-knappene i modalen under) når man
+  // OPPRETTER en ny (se app/api/admin/bookings/manual/route.ts) – men når
+  // man REDIGERER en eksisterende booking sitt klokkeslett, beholdes
+  // bookingens EGEN, opprinnelige varighet (se
+  // app/api/admin/bookings/[id]/route.ts) i stedet, så rutenettet må vite
+  // hvilken av de to det gjelder, både for hvilke celler som er valgbare OG
+  // om valget skal vises som én eller to sammenslåtte halvtimer.
+  const modalDurationMinutes = modal === null ? 60 : modal.mode === "create" ? manualDurationMinutes : modal.durationMinutes;
 
   const manualSelectedIndex = manualTime ? effectiveModalSlots.findIndex((s) => s.label === manualTime) : -1;
   const manualSelectedSecondHalf =
@@ -418,6 +424,7 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
   function openCreateModal(dateStr: string) {
     setModal({ mode: "create", date: dateStr });
     setManualTime("");
+    setManualDurationMinutes(60);
     setManualName("");
     setManualPhone("");
     setManualError(null);
@@ -537,7 +544,13 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
         const res = await fetch("/api/admin/bookings/manual", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date: modal.date, time: manualTime, name: manualName, phone: manualPhone }),
+          body: JSON.stringify({
+            date: modal.date,
+            time: manualTime,
+            name: manualName,
+            phone: manualPhone,
+            durationMinutes: manualDurationMinutes,
+          }),
         });
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         if (!res.ok) {
@@ -939,7 +952,7 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
             </h3>
             <p className={styles.bookingMeta}>
               {modal.mode === "create"
-                ? "Bookingen varer alltid 1 time og er bekreftet med en gang, uten Vipps."
+                ? "Bookingen er bekreftet med en gang, uten Vipps."
                 : modal.status === "cancelled"
                   ? modal.kind === "single"
                     ? "Denne tiden er avlyst. Lagre for å aktivere den igjen – velg et annet klokkeslett hvis det opprinnelige er opptatt av noen andre nå."
@@ -948,6 +961,35 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
                     ? "Velg et nytt klokkeslett, eller la det stå som det er."
                     : "Klokkeslett kan ikke endres her for gjentakende bookinger eller blokkeringer – kun navn/telefon."}
             </p>
+
+            {modal.mode === "create" && (
+              <div className={styles.durationToggle}>
+                <button
+                  type="button"
+                  className={`${styles.durationToggleButton} ${
+                    manualDurationMinutes === 30 ? styles.durationToggleButtonActive : ""
+                  }`}
+                  onClick={() => {
+                    setManualDurationMinutes(30);
+                    setManualTime("");
+                  }}
+                >
+                  30 min
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.durationToggleButton} ${
+                    manualDurationMinutes === 60 ? styles.durationToggleButtonActive : ""
+                  }`}
+                  onClick={() => {
+                    setManualDurationMinutes(60);
+                    setManualTime("");
+                  }}
+                >
+                  1 time
+                </button>
+              </div>
+            )}
 
             {needsSlotGrid && (
               <>

@@ -6,6 +6,7 @@ import { VENUE_NAME } from "@/lib/config";
 import { getBranding } from "@/lib/settings/branding";
 import { getPricingSettings } from "@/lib/settings/pricing";
 import { getRecurringCutoffDate, getRecurringMaxWeeks } from "@/lib/settings/recurringLimit";
+import { getPageContent } from "@/lib/settings/pageContent";
 
 // Uten denne blir siden statisk forhåndsrenderet ved BUILD-tidspunktet (Next.js
 // ser ingen "dynamisk" API-bruk her, bare rene databaseoppslag) – da fryses
@@ -43,11 +44,12 @@ export async function generateMetadata(): Promise<Metadata> {
  * for en annen klubb/bedrift.
  */
 export default async function SquashBookingPage() {
-  const [branding, recurringCutoffDate, recurringMaxWeeks, pricing] = await Promise.all([
+  const [branding, recurringCutoffDate, recurringMaxWeeks, pricing, pageContent] = await Promise.all([
     getBranding(),
     getRecurringCutoffDate(),
     getRecurringMaxWeeks(),
     getPricingSettings(),
+    getPageContent(),
   ]);
 
   const jsonLd = {
@@ -90,17 +92,7 @@ export default async function SquashBookingPage() {
         </div>
       </div>
 
-      <p className={styles.membershipNotice}>
-        For å booke bane må du ha tilgang til banen gjennom medlemskap i{" "}
-        <a href="https://www.skiensgrane.no/squash" target="_blank" rel="noopener noreferrer">
-          Skiens Grane Squash
-        </a>{" "}
-        eller{" "}
-        <a href="https://www.mova.no/treningssenter/skien/hovedsenter" target="_blank" rel="noopener noreferrer">
-          Mova Skien
-        </a>
-        . Du bekrefter dette før du går videre til betaling.
-      </p>
+      <p className={styles.membershipNotice} dangerouslySetInnerHTML={{ __html: pageContent.membershipNoticeHtml }} />
 
       <BookingCalendar
         recurringCutoffDate={recurringCutoffDate}
@@ -118,20 +110,8 @@ export default async function SquashBookingPage() {
           color: "#6b7280",
           textAlign: "center",
         }}
-      >
-        <a href="https://www.skiensgrane.no/squash" target="_blank" rel="noopener noreferrer" style={{ color: "#0046b3" }}>
-          Bli medlem av Skiens Grane Squash
-        </a>
-        {" "}&middot;{" "}
-        <a
-          href="https://www.mova.no/treningssenter/skien/hovedsenter"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "#0046b3" }}
-        >
-          Mova Skien – åpningstider
-        </a>
-      </footer>
+        dangerouslySetInnerHTML={{ __html: pageContent.footerHtml }}
+      />
     </main>
   );
 }

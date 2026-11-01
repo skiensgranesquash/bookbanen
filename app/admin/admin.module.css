@@ -1375,3 +1375,80 @@
   border: 1px solid var(--conflict-border);
   color: var(--danger-dark);
 }
+
+
+/* ---- Rik-tekst-editor for tekstene på bookingsiden (medlemskapsnotis +
+   bunntekst) - se app/admin/branding/RichTextEditor.tsx. ---- */
+
+.richTextField {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.richTextToolbar {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--available);
+  flex-wrap: wrap;
+}
+
+.richTextButton {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.richTextButton:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.richTextButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.richTextEditable {
+  min-height: 70px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  outline: none;
+}
+
+.richTextEditable a {
+  color: var(--brand);
+}
+
+/* ---- Varighetsvelger (30 min / 1 time) for admins manuelle booking - se
+   "Book uten betaling"-modalen i app/admin/BookingsInsights.tsx. ---- */
+
+.durationToggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.durationToggleButton {
+  padding: 8px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.durationToggleButtonActive {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: white;
+}

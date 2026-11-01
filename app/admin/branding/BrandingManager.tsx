@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import styles from "../admin.module.css";
 import AdminNav from "../AdminNav";
+import RichTextEditor from "./RichTextEditor";
 
 interface Branding {
   clubName: string;
@@ -34,6 +35,34 @@ export default function BrandingManager() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // --- Tekster på bookingsiden (medlemskapsnotis + bunntekst) ---
+  const [membershipNoticeHtml, setMembershipNoticeHtml] = useState("");
+  const [footerHtml, setFooterHtml] = useState("");
+  const [contentLoading, setContentLoading] = useState(true);
+  const [contentLoadError, setContentLoadError] = useState<string | null>(null);
+  const [savingNotice, setSavingNotice] = useState(false);
+  const [savingFooter, setSavingFooter] = useState(false);
+  const [noticeMessage, setNoticeMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [footerMessage, setFooterMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  // Økes etter en vellykket "Tilbakestill til standard" for å tvinge
+  // RichTextEditor til å sette innholdet sitt på nytt (se RichTextEditor.tsx).
+  const [noticeResetToken, setNoticeResetToken] = useState(0);
+  const [footerResetToken, setFooterResetToken] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/admin/settings/content", { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Kunne ikke hente tekster.");
+        return res.json() as Promise<{ membershipNoticeHtml: string; footerHtml: string }>;
+      })
+      .then((data) => {
+        setMembershipNoticeHtml(data.membershipNoticeHtml);
+        setFooterHtml(data.footerHtml);
+      })
+      .catch(() => setContentLoadError("Kunne ikke hente tekster akkurat nå."))
+      .finally(() => setContentLoading(false));
+  }, []);
 
   useEffect(() => {
     fetch("/api/admin/settings/branding", { cache: "no-store" })
@@ -116,6 +145,58 @@ export default function BrandingManager() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function saveContentField(
+    field: "membershipNoticeHtml" | "footerHtml",
+    value: string | null,
+    setSavingState: (v: boolean) => void,
+    setMessage: (v: { ok: boolean; text: string } | null) => void,
+    applyValue: (v: string) => void,
+    bumpResetToken?: () => void
+  ) {
+    setSavingState(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/settings/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      const data = (await res.json()) as { error?: string } & Partial<{ membershipNoticeHtml: string; footerHtml: string }>;
+
+      if (!res.ok) {
+        setMessage({ ok: false, text: data.error ?? "Kunne ikke lagre." });
+        return;
+      }
+
+      const next = data[field];
+      if (next !== undefined) applyValue(next);
+      if (value === null) bumpResetToken?.();
+      setMessage({ ok: true, text: value === null ? "Tilbakestilt til standard." : "Lagret." });
+    } catch {
+      setMessage({ ok: false, text: value === null ? "Kunne ikke tilbakestille akkurat nå." : "Kunne ikke lagre akkurat nå." });
+    } finally {
+      setSavingState(false);
+    }
+  }
+
+  function handleSaveNotice() {
+    saveContentField("membershipNoticeHtml", membershipNoticeHtml, setSavingNotice, setNoticeMessage, setMembershipNoticeHtml);
+  }
+
+  function handleResetNotice() {
+    saveContentField("membershipNoticeHtml", null, setSavingNotice, setNoticeMessage, setMembershipNoticeHtml, () =>
+      setNoticeResetToken((t) => t + 1)
+    );
+  }
+
+  function handleSaveFooter() {
+    saveContentField("footerHtml", footerHtml, setSavingFooter, setFooterMessage, setFooterHtml);
+  }
+
+  function handleResetFooter() {
+    saveContentField("footerHtml", null, setSavingFooter, setFooterMessage, setFooterHtml, () => setFooterResetToken((t) => t + 1));
   }
 
   const previewLogo = pendingLogo ?? (removeLogo ? null : savedLogo);
@@ -220,6 +301,75 @@ export default function BrandingManager() {
               {saving ? "Lagrer …" : "Lagre"}
             </button>
           </form>
+        </div>
+      )}
+
+      {contentLoading && <p>Laster …</p>}
+      {contentLoadError && <p className={styles.error}>{contentLoadError}</p>}
+
+      {!contentLoading && !contentLoadError && (
+        <div className={styles.card}>
+          <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Tekster på bookingsiden</h2>
+          <p className={styles.bookingMeta}>
+            De to korte tekstene som vises øverst og nederst på selve bookingsiden. Du kan gjøre tekst fet, kursiv
+            eller understreket, og legge til lenker.
+          </p>
+
+          <div className={styles.formRow}>
+            <label>Medlemskapsnotis (vises rett over kalenderen)</label>
+            <RichTextEditor
+              value={membershipNoticeHtml}
+              onChange={setMembershipNoticeHtml}
+              resetToken={noticeResetToken}
+              disabled={savingNotice}
+            />
+            {noticeMessage && (
+              <p className={noticeMessage.ok ? styles.success : styles.error} style={{ marginTop: 6 }}>
+                {noticeMessage.text}
+              </p>
+            )}
+            <div style={{ display: "flex", gap: "8px", marginTop: 8 }}>
+              <button type="button" className={styles.submitButton} disabled={savingNotice} onClick={handleSaveNotice}>
+                {savingNotice ? "Lagrer …" : "Lagre"}
+              </button>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                disabled={savingNotice}
+                onClick={handleResetNotice}
+              >
+                Tilbakestill til standard
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.formRow} style={{ marginTop: 20 }}>
+            <label>Bunntekst (vises nederst på siden)</label>
+            <RichTextEditor
+              value={footerHtml}
+              onChange={setFooterHtml}
+              resetToken={footerResetToken}
+              disabled={savingFooter}
+            />
+            {footerMessage && (
+              <p className={footerMessage.ok ? styles.success : styles.error} style={{ marginTop: 6 }}>
+                {footerMessage.text}
+              </p>
+            )}
+            <div style={{ display: "flex", gap: "8px", marginTop: 8 }}>
+              <button type="button" className={styles.submitButton} disabled={savingFooter} onClick={handleSaveFooter}>
+                {savingFooter ? "Lagrer …" : "Lagre"}
+              </button>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                disabled={savingFooter}
+                onClick={handleResetFooter}
+              >
+                Tilbakestill til standard
+              </button>
+            </div>
+          </div>
         </div>
       )}
         </div>

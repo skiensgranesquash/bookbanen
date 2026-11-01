@@ -2,30 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRepository } from "@/lib/db";
 import { isValidBookingDateString, isWithinOpeningHours, occurrenceRange } from "@/lib/slots";
 import { normalizeNorwegianMobile } from "@/lib/phone";
-import { durationMinutesToSlots } from "@/lib/config";
+import { durationMinutesToSlots, isBookableDurationMinutes, type BookingDurationMinutes } from "@/lib/config";
 import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHours";
 import { getPricingSettings, priceForDuration } from "@/lib/settings/pricing";
 
 export const dynamic = "force-dynamic";
-
-/** Admins manuelle booking (uten betaling) er alltid nøyaktig 1 time – se kommentaren under. */
-const MANUAL_BOOKING_DURATION_SLOTS = durationMinutesToSlots(60);
 
 interface ManualBookingBody {
   date?: string;
   time?: string;
   name?: string;
   phone?: string;
+  /** 30 eller 60 (minutter) – utelatt betyr 60, den gamle, faste varigheten. */
+  durationMinutes?: number;
 }
 
 /**
  * POST /api/admin/bookings/manual
- * Body: { date: "YYYY-MM-DD", time: "HH:mm", name: string, phone?: string }
+ * Body: { date: "YYYY-MM-DD", time: "HH:mm", name: string, phone?: string, durationMinutes?: 30 | 60 }
  *
  * Admin booker en time direkte på vegne av en kunde (f.eks. betalt kontant,
  * eller bare registrert manuelt) – ingen betaling involvert, bindende med en
- * gang. Varigheten er alltid nøyaktig 1 time, akkurat som en vanlig booking
- * – samme rutenett og åpningstider gjelder, se app/api/squash/bookings/route.ts.
+ * gang. Varigheten er 30 minutter eller 1 time, samme valg som en vanlig
+ * booking har (se BOOKABLE_DURATIONS_MINUTES i lib/config.ts) – 1 time er
+ * fortsatt forhåndsvalgt som standard, siden det var den gamle, faste
+ * oppførselen. Samme rutenett og åpningstider gjelder uansett, se
+ * app/api/squash/bookings/route.ts.
  */
 export async function POST(request: NextRequest) {
   let body: ManualBookingBody;
@@ -45,6 +47,11 @@ export async function POST(request: NextRequest) {
   if (!time || !/^\d{2}:\d{2}$/.test(time)) {
     return NextResponse.json({ error: "Ugyldig klokkeslett." }, { status: 400 });
   }
+
+  const durationMinutes: BookingDurationMinutes = isBookableDurationMinutes(body.durationMinutes)
+    ? body.durationMinutes
+    : 60;
+
   if (name.length < 2 || name.length > 100) {
     return NextResponse.json({ error: "Navn må være mellom 2 og 100 tegn." }, { status: 400 });
   }
@@ -64,7 +71,7 @@ export async function POST(request: NextRequest) {
     phone = normalized;
   }
 
-  const range = occurrenceRange(date, time, MANUAL_BOOKING_DURATION_SLOTS);
+  const range = occurrenceRange(date, time, durationMinutesToSlots(durationMinutes));
   if (!range) {
     return NextResponse.json({ error: "Ugyldig klokkeslett." }, { status: 400 });
   }
@@ -82,7 +89,7 @@ export async function POST(request: NextRequest) {
   const result = await repo.createAdminBooking({
     customerName: name,
     customerPhone: phone,
-    totalAmountOre: priceForDuration(pricing, 60),
+    totalAmountOre: priceForDuration(pricing, durationMinutes),
     range: { startTime: range.startTime.toISOString(), endTime: range.endTime.toISOString() },
   });
 
