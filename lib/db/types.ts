@@ -161,16 +161,19 @@ export interface BookingRepository {
   createBlock(ranges: TimeRange[], note: string): Promise<CreateResult>;
 
   /**
-   * Admin booker en tid direkte på vegne av en kunde (f.eks. betalt kontant,
-   * eller bare registrert manuelt) – `kind` er alltid "single" (teller i
-   * statistikk/leaderboard som en ekte booking, i motsetning til "block"),
-   * og bindende med en gang (status "confirmed"), ingen betaling involvert.
+   * Admin booker en eller flere tider direkte på vegne av en kunde (f.eks.
+   * betalt kontant, eller bare registrert manuelt) – ett tidsrom gir `kind`
+   * "single", flere tidsrom (samme ukedag/klokkeslett, én uke mellom hver –
+   * se generateWeeklyDates) gir "recurring", akkurat som en vanlig
+   * kundebooking (teller begge i statistikk/leaderboard som ekte bookinger, i
+   * motsetning til "block"), og bindende med en gang (status "confirmed"),
+   * ingen betaling involvert.
    */
   createAdminBooking(input: {
     customerName: string;
     customerPhone: string;
     totalAmountOre: number;
-    range: TimeRange;
+    ranges: TimeRange[];
   }): Promise<CreateResult>;
 
   /**

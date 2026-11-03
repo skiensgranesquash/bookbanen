@@ -219,6 +219,12 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
   const [manualDurationMinutes, setManualDurationMinutes] = useState<30 | 60>(60);
   const [manualName, setManualName] = useState("");
   const [manualPhone, setManualPhone] = useState("");
+  // Gjentakende booking (kun relevant i "create"-modus – en redigering har
+  // alltid kun ett eksisterende tidsrom å flytte, se modal.kind over) – samme
+  // ukedag/klokkeslett hver uke fra og med modal.date, se
+  // app/api/admin/bookings/manual/route.ts.
+  const [manualRecurring, setManualRecurring] = useState(false);
+  const [manualWeeks, setManualWeeks] = useState(4);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
 
@@ -422,6 +428,8 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
     setManualDurationMinutes(60);
     setManualName("");
     setManualPhone("");
+    setManualRecurring(false);
+    setManualWeeks(4);
     setManualError(null);
   }
 
@@ -521,6 +529,7 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
             name: manualName,
             phone: manualPhone,
             durationMinutes: manualDurationMinutes,
+            weeks: manualRecurring ? manualWeeks : 1,
           }),
         });
         const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -930,6 +939,34 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
               </div>
             )}
 
+            {modal.mode === "create" && (
+              <div style={{ marginTop: 10 }}>
+                <label className={styles.checkboxOption}>
+                  <input
+                    type="checkbox"
+                    checked={manualRecurring}
+                    onChange={(e) => setManualRecurring(e.target.checked)}
+                  />
+                  Gjentakende – samme ukedag/klokkeslett hver uke
+                </label>
+                {manualRecurring && (
+                  <div className={styles.formRow} style={{ marginTop: 10 }}>
+                    <label htmlFor="manual-weeks">Antall uker (inkl. denne)</label>
+                    <input
+                      id="manual-weeks"
+                      type="number"
+                      min={1}
+                      max={MAX_RECURRING_WEEKS}
+                      value={manualWeeks}
+                      onChange={(e) =>
+                        setManualWeeks(Math.max(1, Math.min(MAX_RECURRING_WEEKS, Number(e.target.value) || 1)))
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             {needsSlotGrid && (
               <>
                 {modalSlotsLoading && <p className={styles.bookingMeta}>Henter ledige tider …</p>}
@@ -1024,7 +1061,9 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
                       ? "Aktiverer …"
                       : "Lagrer …"
                     : modal.mode === "create"
-                      ? "Book tiden"
+                      ? manualRecurring
+                        ? "Book rekken"
+                        : "Book tiden"
                       : modal.status === "cancelled"
                         ? "Aktiver på nytt"
                         : "Lagre endringer"}

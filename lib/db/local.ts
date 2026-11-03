@@ -291,19 +291,19 @@ export const localRepository: BookingRepository = {
     });
   },
 
-  async createAdminBooking({ customerName, customerPhone, totalAmountOre, range }) {
+  async createAdminBooking({ customerName, customerPhone, totalAmountOre, ranges }) {
     return withLock(async () => {
       const db = await loadDb();
       const { db: nextDb, result } = await createGroupWithSlotsInternal(db, {
         id: randomUUID(),
-        kind: "single",
+        kind: ranges.length > 1 ? "recurring" : "single",
         source: "admin",
         customerName,
         customerPhone,
         totalAmountOre,
         holdExpiresAt: null,
         note: null,
-        slots: [{ courtId: "1", startTime: range.startTime, endTime: range.endTime }],
+        slots: ranges.map((range) => ({ courtId: "1", startTime: range.startTime, endTime: range.endTime })),
       });
 
       if (result.ok) {

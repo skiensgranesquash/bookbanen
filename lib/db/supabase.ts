@@ -300,19 +300,19 @@ export const supabaseRepository: BookingRepository = {
     );
   },
 
-  async createAdminBooking({ customerName, customerPhone, totalAmountOre, range }) {
+  async createAdminBooking({ customerName, customerPhone, totalAmountOre, ranges }) {
     const { randomUUID } = await import("node:crypto");
     return insertGroupWithSlots(
       {
         id: randomUUID(),
-        kind: "single",
+        kind: ranges.length > 1 ? "recurring" : "single",
         source: "admin",
         customerName,
         customerPhone,
         totalAmountOre,
         holdExpiresAt: null,
         note: null,
-        slots: [{ courtId: COURT_ID, startTime: range.startTime, endTime: range.endTime }],
+        slots: ranges.map((range) => ({ courtId: COURT_ID, startTime: range.startTime, endTime: range.endTime })),
       },
       "confirmed"
     );
