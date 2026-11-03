@@ -68,6 +68,8 @@ interface Occurrence {
   id: string;
   dateStr: string;
   timeLabel: string;
+  /** Sluttidspunkt ("HH:mm") for akkurat DENNE forekomsten – brukt til å vise et fra–til-klokkeslett for blokkeringer (se flattenOccurrences). */
+  endTimeLabel: string;
   label: string;
   /** "Mislyktes" – avlyst eller utløpt (betaling fullført aldri, eller admin avlyste en ekte booking). Vises rødt og har alltid prioritet på å være synlig i dag-ruten, foran bekreftede/ventende. */
   failed: boolean;
@@ -90,13 +92,25 @@ function flattenOccurrences(bookings: BookingRow[], includeStatuses: BookingRow[
     for (const slot of booking.slots) {
       const dateStr = formatOslo(slot.startTime, "yyyy-MM-dd");
       const timeLabel = formatOslo(slot.startTime, "HH:mm");
+      const endTimeLabel = formatOslo(slot.endTime, "HH:mm");
       const durationMinutes = Math.round(
         (new Date(slot.endTime).getTime() - new Date(slot.startTime).getTime()) / 60_000
       );
       const failed = booking.status === "cancelled" || booking.status === "expired";
       const shortText = booking.kind === "block" ? booking.note ?? "Blokkert" : booking.customerName;
+      // En "hele dagen"-blokkering (se app/api/admin/block/route.ts) lagres
+      // fra 00:00 til 00:00 NESTE dag, altså 1440 minutter – da gir verken
+      // "kl. 00:00" eller et fra–til-klokkeslett noen mening, så den får sin
+      // egen tekst. En vanlig (klokkeslett-avgrenset) blokkering viser nå
+      // fra–til i stedet for bare START-tidspunktet, siden f.eks. "15:08"
+      // alene ikke forteller om den varer 10 minutter eller resten av dagen.
+      const isWholeDayBlock = booking.kind === "block" && durationMinutes >= 1440;
       const label =
-        booking.kind === "block" ? `🔧 ${shortText} kl. ${timeLabel}` : `${booking.customerName} kl. ${timeLabel}`;
+        booking.kind === "block"
+          ? isWholeDayBlock
+            ? `🔧 ${shortText} (hele dagen)`
+            : `🔧 ${shortText} kl. ${timeLabel}–${endTimeLabel}`
+          : `${booking.customerName} kl. ${timeLabel}`;
       const statusClass = failed
         ? styles.bcEventLineFailed
         : booking.kind === "block"
@@ -109,6 +123,7 @@ function flattenOccurrences(bookings: BookingRow[], includeStatuses: BookingRow[
         id: booking.id,
         dateStr,
         timeLabel,
+        endTimeLabel,
         label,
         failed,
         shortText,
@@ -372,8 +387,17 @@ export default function BookingsInsights({ bookings, onChanged, onCancel, hoursC
   // statistikken og leaderboard (se Leaderboard-komponenten under) kun teller
   // BEKREFTEDE, ekte kundebookinger, siden det er de som representerer
   // faktisk bruk/omsetning.
+  // En FJERNET blokkering (status "cancelled" – se handleAgendaCancel/onCancel
+  // under) skal bare forsvinne helt, ikke vises gjennomstreket slik en ekte
+  // avlyst/utløpt KUNDEbooking gjør – den historikken er nyttig for kunder,
+  // men ikke for admin sine egne blokkeringer. Filtreres derfor bort her, ETT
+  // sted, slik at den uansett ikke dukker opp verken i kalenderen eller i
+  // agenda-panelet ved siden av.
   const calendarOccurrences = useMemo(
-    () => flattenOccurrences(bookings, ["pending", "confirmed", "cancelled", "expired"]),
+    () =>
+      flattenOccurrences(bookings, ["pending", "confirmed", "cancelled", "expired"]).filter(
+        (occ) => !(occ.kind === "block" && occ.failed)
+      ),
     [bookings]
   );
   const confirmedCustomerOccurrences = useConfirmedCustomerOccurrences(bookings);
@@ -702,7 +726,18 @@ export default function BookingsInsights({ bookings, onChanged, onCancel, hoursC
               const isToday = isSameDay(day, today);
               const isSelected = dateStr === selectedDate;
               const dayOccurrences = occurrencesByDate.get(dateStr) ?? [];
-              const { visible, hiddenCount } = pickVisibleForDay(dayOccurrences);
+              // En "hele dagen"-blokkering dekker (se kommentaren i
+              // flattenOccurrences over) fra 00:00 til 00:00 neste dag – i
+              // stedet for å vise den som en forvirrende "00:00 ..."-lapp
+              // blant de andre oppføringene, farges HELE dag-ruten rød (se
+              // bcDayBlocked under) og selve lappen utelates fra listen –
+              // cellens egen farge forteller allerede at dagen er full.
+              const wholeDayBlocks = dayOccurrences.filter((o) => o.kind === "block" && o.durationMinutes >= 1440);
+              const isWholeDayBlocked = wholeDayBlocks.length > 0;
+              const pillOccurrences = isWholeDayBlocked
+                ? dayOccurrences.filter((o) => !(o.kind === "block" && o.durationMinutes >= 1440))
+                : dayOccurrences;
+              const { visible, hiddenCount } = pickVisibleForDay(pillOccurrences);
               // Måneden vises i tillegg til datotallet på vinduets første dag
               // (for å alltid vite hvilken måned det starter i) OG på den 1.
               // i måneden uansett hvor den faller – det er nettopp DER et
@@ -732,6 +767,7 @@ export default function BookingsInsights({ bookings, onChanged, onCancel, hoursC
               if (altMonth) classNames.push(styles.bcDayAltMonth);
               if (isMonthStart) classNames.push(styles.bcDayMonthStart);
               if (isClosedDay) classNames.push(styles.bcDayClosed);
+              if (isWholeDayBlocked) classNames.push(styles.bcDayBlocked);
               if (isPastDay) classNames.push(styles.bcDayPast);
               if (isToday) classNames.push(styles.bcDayToday);
               if (isSelected) classNames.push(styles.bcDaySelected);
@@ -770,7 +806,7 @@ export default function BookingsInsights({ bookings, onChanged, onCancel, hoursC
                     <div className={styles.bcDayEntries}>
                       {visible.map((occ, i) => (
                         <span key={i} className={`${styles.bcEntry} ${entryClassFor(occ)}`}>
-                          {occ.timeLabel} {occ.shortText}
+                          {occ.kind === "block" ? `${occ.timeLabel}–${occ.endTimeLabel}` : occ.timeLabel} {occ.shortText}
                         </span>
                       ))}
                       {hiddenCount > 0 && <span className={styles.bcDayMore}>+{hiddenCount} mer</span>}
@@ -791,7 +827,7 @@ export default function BookingsInsights({ bookings, onChanged, onCancel, hoursC
               Venter på betaling
             </span>
             <span>
-              <span className={styles.calLegendDot} style={{ background: "#b45309" }} />
+              <span className={styles.calLegendDot} style={{ background: "var(--danger-dark)" }} />
               Blokkert
             </span>
             <span>

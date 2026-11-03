@@ -886,6 +886,18 @@
   color: var(--danger-dark);
 }
 
+/** Hele dagen er blokkert av admin (se wholeDayBlocks/isWholeDayBlocked i
+    BookingsInsights.tsx) – samme røde visuelle språk som bcDayClosed over,
+    men en egen klasse siden de to betyr ulike ting (stengt vs. blokkert av
+    admin). */
+.bcDayBlocked {
+  background: var(--conflict-bg);
+}
+
+.bcDayBlocked .bcDayNumber {
+  color: var(--danger-dark);
+}
+
 .bcDayToday {
   border-color: var(--brand-yellow);
   border-width: 1.5px;
@@ -968,8 +980,9 @@
 }
 
 .bcEntryBlock {
-  background: #b45309;
-  color: white;
+  background: var(--conflict-bg);
+  color: var(--danger-dark);
+  border-color: var(--conflict-border);
 }
 
 .bcEntryFailed {
@@ -1061,9 +1074,9 @@
 }
 
 .agendaRow.bcEventLineBlock {
-  background: var(--surface);
-  border-color: var(--border);
-  color: #b45309;
+  background: var(--conflict-bg);
+  border-color: var(--conflict-border);
+  color: var(--danger-dark);
 }
 
 /* ---- Oversikt: rask blokkering av den valgte dagen (over avtalelisten) ---- */
