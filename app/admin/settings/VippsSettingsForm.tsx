@@ -40,6 +40,11 @@ export default function VippsSettingsForm() {
   const [activating, setActivating] = useState(false);
   const [activateMessage, setActivateMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const [paymentHoldMinutes, setPaymentHoldMinutes] = useState(10);
+  const [paymentHoldLoading, setPaymentHoldLoading] = useState(true);
+  const [savingPaymentHold, setSavingPaymentHold] = useState(false);
+  const [paymentHoldMessage, setPaymentHoldMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
   async function loadStatus() {
     setLoadingStatus(true);
     try {
@@ -54,8 +59,20 @@ export default function VippsSettingsForm() {
     }
   }
 
+  async function loadPaymentHold() {
+    setPaymentHoldLoading(true);
+    try {
+      const res = await fetch("/api/admin/settings/payment-hold", { cache: "no-store" });
+      const data = (await res.json()) as { minutes?: number };
+      if (typeof data.minutes === "number") setPaymentHoldMinutes(data.minutes);
+    } finally {
+      setPaymentHoldLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadStatus();
+    loadPaymentHold();
     if (typeof window !== "undefined") {
       setCallbackUrl(`${window.location.origin}/api/squash/vipps-webhook`);
     }
@@ -161,6 +178,30 @@ export default function VippsSettingsForm() {
       setActivateMessage({ ok: false, text: "Kunne ikke endre akkurat nå." });
     } finally {
       setActivating(false);
+    }
+  }
+
+  async function handleSavePaymentHold(e: FormEvent) {
+    e.preventDefault();
+    setSavingPaymentHold(true);
+    setPaymentHoldMessage(null);
+    try {
+      const res = await fetch("/api/admin/settings/payment-hold", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ minutes: paymentHoldMinutes }),
+      });
+      const data = (await res.json()) as { error?: string; minutes?: number };
+      if (!res.ok) {
+        setPaymentHoldMessage({ ok: false, text: data.error ?? "Kunne ikke lagre." });
+        return;
+      }
+      if (typeof data.minutes === "number") setPaymentHoldMinutes(data.minutes);
+      setPaymentHoldMessage({ ok: true, text: "Lagret." });
+    } catch {
+      setPaymentHoldMessage({ ok: false, text: "Kunne ikke lagre akkurat nå." });
+    } finally {
+      setSavingPaymentHold(false);
     }
   }
 
@@ -323,6 +364,36 @@ export default function VippsSettingsForm() {
         )}
       </div>
       </div>
+      </div>
+
+      <div className={styles.card}>
+        <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Betalingsforespørsel fra admin</h2>
+        <p className={styles.bookingMeta}>
+          Når admin booker en tid i Bookinger-fanen og velger &quot;Be om betaling (Vipps)&quot; i stedet for å booke
+          direkte, sendes det en betalingsforespørsel rett til kundens Vipps-app, og bookingen blir først bindende
+          når kunden har betalt. Betaler ikke kunden i tide, frigjøres tiden automatisk igjen - her styrer du hvor
+          lenge den holdes av først.
+        </p>
+        <form onSubmit={handleSavePaymentHold} className={styles.form}>
+          <div className={styles.formRow}>
+            <label htmlFor="payment-hold-minutes">Minutter tiden holdes av</label>
+            <input
+              id="payment-hold-minutes"
+              type="number"
+              min={1}
+              max={10080}
+              value={paymentHoldMinutes}
+              onChange={(e) => setPaymentHoldMinutes(Math.max(1, Math.min(10080, Number(e.target.value) || 1)))}
+              disabled={paymentHoldLoading}
+            />
+          </div>
+          {paymentHoldMessage && (
+            <p className={paymentHoldMessage.ok ? styles.bookingMeta : styles.error}>{paymentHoldMessage.text}</p>
+          )}
+          <button type="submit" className={styles.submitButton} disabled={savingPaymentHold || paymentHoldLoading}>
+            {savingPaymentHold ? "Lagrer …" : "Lagre"}
+          </button>
+        </form>
       </div>
         </div>
       </main>

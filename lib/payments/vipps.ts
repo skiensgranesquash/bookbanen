@@ -163,7 +163,7 @@ async function rawCreatePayment(input: CreatePaymentInput): Promise<RawCreatePay
       amount: { currency: "NOK", value: input.amountOre },
       paymentMethod: { type: "WALLET" },
       reference: input.reference,
-      userFlow: "WEB_REDIRECT",
+      userFlow: input.userFlow ?? "WEB_REDIRECT",
       returnUrl: input.returnUrl,
       paymentDescription: input.description,
       customer: { phoneNumber: toVippsPhoneNumber(input.phoneNumber) },

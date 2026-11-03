@@ -5,6 +5,18 @@ export interface CreatePaymentInput {
   phoneNumber: string;
   description: string;
   returnUrl: string;
+  /**
+   * "WEB_REDIRECT" (standard, brukes hvis utelatt) = brukeren åpner en lenke
+   * i egen nettleser og godkjenner der - slik den offentlige bookingsiden
+   * alltid gjør. "PUSH_MESSAGE" = betalingsforespørselen sendes rett til
+   * Vipps-appen på telefonnummeret over, uten noen lenke - brukt når ADMIN
+   * oppretter bookingen og ber om betaling på vegne av kunden (se
+   * app/api/admin/bookings/manual/route.ts), siden kunden selv ikke sitter i
+   * noen nettleser akkurat da. Merk: Vipps krever normalt at salgsenheten
+   * (MSN) er egen-godkjent av dem for push-varianten i PRODUKSJON (fungerer
+   * fritt i test-miljøet) - se lib/payments/vipps.ts.
+   */
+  userFlow?: "WEB_REDIRECT" | "PUSH_MESSAGE";
 }
 
 export type ReconcileOutcome = "confirmed" | "cancelled" | "pending";

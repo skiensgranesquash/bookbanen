@@ -225,6 +225,11 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
   // app/api/admin/bookings/manual/route.ts.
   const [manualRecurring, setManualRecurring] = useState(false);
   const [manualWeeks, setManualWeeks] = useState(4);
+  // Betalingsmåte for en NY manuell booking (kun relevant i "create"-modus) –
+  // se durationToggle-aktige knappene i modalen under, og
+  // app/api/admin/bookings/manual/route.ts for selve logikken bak de to
+  // modiene.
+  const [manualRequestPayment, setManualRequestPayment] = useState(false);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
 
@@ -430,6 +435,7 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
     setManualPhone("");
     setManualRecurring(false);
     setManualWeeks(4);
+    setManualRequestPayment(false);
     setManualError(null);
   }
 
@@ -530,12 +536,24 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
             phone: manualPhone,
             durationMinutes: manualDurationMinutes,
             weeks: manualRecurring ? manualWeeks : 1,
+            requestPayment: manualRequestPayment,
           }),
         });
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        const data = (await res.json().catch(() => ({}))) as { error?: string; redirectUrl?: string };
         if (!res.ok) {
-          setManualError(data.error ?? "Kunne ikke booke tiden.");
+          setManualError(
+            data.error ?? (manualRequestPayment ? "Kunne ikke sende betalingsforespørsel." : "Kunne ikke booke tiden.")
+          );
           return;
+        }
+        // Kun satt i mock/testmodus (se app/api/admin/bookings/manual/route.ts)
+        // – en lenke dere selv kan åpne for å simulere kundens godkjenning,
+        // siden det ikke finnes noen ekte telefon å sende et push-varsel til
+        // i testmodus.
+        if (manualRequestPayment && data.redirectUrl) {
+          window.alert(
+            `Betalingsforespørsel sendt. Testlenke (kun i simulert/test-modus – ignorer i ekte Vipps-modus): ${data.redirectUrl}`
+          );
         }
       } else {
         const body: { name: string; phone: string; date?: string; time?: string; reactivate?: boolean } = {
@@ -570,7 +588,9 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
     } catch {
       setManualError(
         modal.mode === "create"
-          ? "Kunne ikke booke tiden akkurat nå."
+          ? manualRequestPayment
+            ? "Kunne ikke sende betalingsforespørsel akkurat nå."
+            : "Kunne ikke booke tiden akkurat nå."
           : modal.status === "cancelled"
             ? "Kunne ikke aktivere bookingen på nytt akkurat nå."
             : "Kunne ikke lagre endringen akkurat nå."
@@ -580,7 +600,10 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
     }
   }
 
-  const submitDisabled = manualSubmitting || (needsSlotGrid && !manualTime);
+  const submitDisabled =
+    manualSubmitting ||
+    (needsSlotGrid && !manualTime) ||
+    (modal !== null && modal.mode === "create" && manualRequestPayment && !manualPhone.trim());
 
   return (
     <div className={styles.card}>
@@ -895,12 +918,21 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
         <div className={styles.modalOverlay} onClick={closeModal}>
           <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ marginTop: 0, fontSize: "1.05rem" }}>
-              {modal.mode === "create" ? "Book uten betaling" : modal.status === "cancelled" ? "Aktiver booking på nytt" : "Rediger booking"} –{" "}
+              {modal.mode === "create"
+                ? manualRequestPayment
+                  ? "Be om betaling (Vipps)"
+                  : "Book uten betaling"
+                : modal.status === "cancelled"
+                  ? "Aktiver booking på nytt"
+                  : "Rediger booking"}{" "}
+              –{" "}
               {format(parseDateOnly(modal.date), "EEEE d. MMMM", { locale: nb })}
             </h3>
             <p className={styles.bookingMeta}>
               {modal.mode === "create"
-                ? "Bookingen er bekreftet med en gang, uten Vipps."
+                ? manualRequestPayment
+                  ? "Det sendes en betalingsforespørsel til telefonnummeret under via Vipps. Bookingen blir først bindende når kunden har godkjent/betalt."
+                  : "Bookingen er bekreftet med en gang, uten Vipps."
                 : modal.status === "cancelled"
                   ? modal.kind === "single"
                     ? "Denne tiden er avlyst. Lagre for å aktivere den igjen – velg et annet klokkeslett hvis det opprinnelige er opptatt av noen andre nå."
@@ -935,6 +967,29 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
                   }}
                 >
                   1 time
+                </button>
+              </div>
+            )}
+
+            {modal.mode === "create" && (
+              <div className={styles.durationToggle} style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  className={`${styles.durationToggleButton} ${
+                    !manualRequestPayment ? styles.durationToggleButtonActive : ""
+                  }`}
+                  onClick={() => setManualRequestPayment(false)}
+                >
+                  Book uten betaling
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.durationToggleButton} ${
+                    manualRequestPayment ? styles.durationToggleButtonActive : ""
+                  }`}
+                  onClick={() => setManualRequestPayment(true)}
+                >
+                  Be om betaling (Vipps)
                 </button>
               </div>
             )}
@@ -1045,10 +1100,15 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
                 />
               </div>
               <div className={styles.formRow}>
-                <label htmlFor="manual-phone">Telefon (valgfritt)</label>
+                <label htmlFor="manual-phone">
+                  {modal.mode === "create" && manualRequestPayment
+                    ? "Telefon (påkrevd for betalingsforespørsel)"
+                    : "Telefon (valgfritt)"}
+                </label>
                 <input
                   id="manual-phone"
                   type="tel"
+                  required={modal.mode === "create" && manualRequestPayment}
                   value={manualPhone}
                   onChange={(e) => setManualPhone(e.target.value)}
                 />
@@ -1061,9 +1121,13 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
                       ? "Aktiverer …"
                       : "Lagrer …"
                     : modal.mode === "create"
-                      ? manualRecurring
-                        ? "Book rekken"
-                        : "Book tiden"
+                      ? manualRequestPayment
+                        ? manualRecurring
+                          ? "Send betalingsforespørsel (rekke)"
+                          : "Send betalingsforespørsel"
+                        : manualRecurring
+                          ? "Book rekken"
+                          : "Book tiden"
                       : modal.status === "cancelled"
                         ? "Aktiver på nytt"
                         : "Lagre endringer"}
