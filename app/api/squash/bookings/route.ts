@@ -25,6 +25,7 @@ import { getPaymentProviderImpl } from "@/lib/payments";
 import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHours";
 import { getPricingSettings, priceForDuration } from "@/lib/settings/pricing";
 import { getRecurringCutoffDate, getRecurringMaxWeeks } from "@/lib/settings/recurringLimit";
+import { getSingleBookingMaxDaysAhead } from "@/lib/settings/singleBookingLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -81,8 +82,11 @@ export async function POST(request: NextRequest) {
   if (!date || !isValidBookingDateString(date)) {
     return NextResponse.json({ error: "Ugyldig dato." }, { status: 400 });
   }
-  if (mode === "single" && !isDateBookable(date)) {
-    return NextResponse.json({ error: "Datoen er ikke bookbar." }, { status: 400 });
+  if (mode === "single") {
+    const maxDaysAhead = await getSingleBookingMaxDaysAhead();
+    if (!isDateBookable(date, maxDaysAhead)) {
+      return NextResponse.json({ error: "Datoen er ikke bookbar." }, { status: 400 });
+    }
   }
   if (mode === "recurring" && date < todayInClubTimeZone()) {
     return NextResponse.json({ error: "Startdatoen kan ikke være i fortiden." }, { status: 400 });

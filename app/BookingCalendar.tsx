@@ -111,6 +111,8 @@ interface BookingCalendarProps {
   recurringCutoffDate: string | null;
   /** Maks antall uker i en enkelt serie (satt av klubben i adminpanelet), eller null for ingen egen grense (da gjelder kun MAX_RECURRING_WEEKS) – se lib/settings/recurringLimit.ts. Denne og recurringCutoffDate er to UAVHENGIGE grenser som begge gjelder samtidig (den strengeste vinner). */
   recurringMaxWeeks: number | null;
+  /** Hvor mange dager frem i tid en enkelttime har lov til å bookes (satt av klubben i adminpanelet) – se lib/settings/singleBookingLimit.ts. Gjelder KUN kundens egen, selvbetjente enkeltbooking her – admins egen manuelle booking i adminpanelet er unntatt denne grensen. */
+  maxSingleBookingDaysAhead: number;
   /** Dagens priser (i øre), satt av klubben i adminpanelet – se lib/settings/pricing.ts. De to er HELT uavhengige av hverandre (1 time er ikke nødvendigvis dobbelt så dyrt som 30 min). */
   price30MinOre: number;
   price60MinOre: number;
@@ -119,11 +121,12 @@ interface BookingCalendarProps {
 export default function BookingCalendar({
   recurringCutoffDate,
   recurringMaxWeeks,
+  maxSingleBookingDaysAhead,
   price30MinOre,
   price60MinOre,
 }: BookingCalendarProps) {
   const today = useMemo(() => todayInClubTimeZone(), []);
-  const maxDate = useMemo(() => maxBookableDate(), []);
+  const maxDate = useMemo(() => maxBookableDate(maxSingleBookingDaysAhead), [maxSingleBookingDaysAhead]);
 
   const [date, setDate] = useState(today);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);

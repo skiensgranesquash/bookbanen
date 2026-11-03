@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRepository } from "@/lib/db";
 import { expireStaleHolds } from "@/lib/holds";
 import { COURT_ID } from "@/lib/config";
+import { SESSION_COOKIE_NAME, verifySessionCookieValue } from "@/lib/auth/session";
 import { getEffectiveHoursForDate } from "@/lib/settings/openingHours";
+import { getSingleBookingMaxDaysAhead } from "@/lib/settings/singleBookingLimit";
 import { generateSlotsForDate, isDateBookable, isValidBookingDateString } from "@/lib/slots";
 
 export const dynamic = "force-dynamic";
@@ -48,8 +50,19 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!isDateBookable(dateStr)) {
-    return NextResponse.json({ date: dateStr, slots: [], closed: true, note: null });
+  // Admins EGEN innloggede sesjon er UNNTATT grensen for "hvor mange dager
+  // frem i tid" under – den gjelder kun kundens selvbetjente enkeltbooking
+  // på bookingsiden, ikke adminpanelets manuelle booking (som henter ledige
+  // tider fra nettopp dette endepunktet, se app/admin/BookingsInsights.tsx).
+  // Uten dette unntaket ble admin feilaktig møtt med "stengt denne dagen" på
+  // alle datoer forbi grensen, selv når banen i realiteten var åpen.
+  const adminSession = await verifySessionCookieValue(request.cookies.get(SESSION_COOKIE_NAME)?.value);
+
+  if (!adminSession) {
+    const maxDaysAhead = await getSingleBookingMaxDaysAhead();
+    if (!isDateBookable(dateStr, maxDaysAhead)) {
+      return NextResponse.json({ date: dateStr, slots: [], closed: true, note: null });
+    }
   }
 
   // Starter oppryddingen av utløpte holds SAMTIDIG med åpningstid-oppslaget

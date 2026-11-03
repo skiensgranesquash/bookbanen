@@ -16,7 +16,7 @@ import {
 import { nb } from "date-fns/locale";
 import styles from "../admin.module.css";
 import AdminNav from "../AdminNav";
-import { MAX_RECURRING_WEEKS } from "@/lib/config";
+import { MAX_DAYS_AHEAD, MAX_RECURRING_WEEKS } from "@/lib/config";
 
 type WeekdayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
@@ -161,6 +161,17 @@ export default function OpeningHoursManager() {
   const [savingMaxWeeks, setSavingMaxWeeks] = useState(false);
   const [maxWeeksMessage, setMaxWeeksMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Grense for ENKELTTIMER – hvor mange dager frem i tid KUNDEN selv kan
+  // booke en enkelttime på bookingsiden (se
+  // lib/settings/singleBookingLimit.ts). Helt uavhengig av grensene for
+  // gjentakende bookinger over – admins egen manuelle booking i
+  // adminpanelet er IKKE påvirket av denne grensen i det hele tatt (se
+  // app/api/squash/availability/route.ts).
+  const [singleMaxDays, setSingleMaxDays] = useState("");
+  const [singleMaxDaysLoading, setSingleMaxDaysLoading] = useState(true);
+  const [savingSingleMaxDays, setSavingSingleMaxDays] = useState(false);
+  const [singleMaxDaysMessage, setSingleMaxDaysMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
   // Priser for 30 min/1 time (se lib/settings/pricing.ts) – holdt som tekst
   // (kr, med evt. komma/desimal) i selve input-feltene mens man skriver, og
   // konvertert til øre først når man faktisk lagrer.
@@ -214,6 +225,21 @@ export default function OpeningHoursManager() {
         // Ikke kritisk nok til å blokkere resten av siden – feltene starter bare tomme.
       })
       .finally(() => setCutoffLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/admin/settings/single-booking-limit", { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Kunne ikke hente grensen.");
+        return res.json() as Promise<{ maxDaysAhead: number }>;
+      })
+      .then((data) => {
+        setSingleMaxDays(String(data.maxDaysAhead));
+      })
+      .catch(() => {
+        // Ikke kritisk nok til å blokkere resten av siden – feltet starter bare tomt.
+      })
+      .finally(() => setSingleMaxDaysLoading(false));
   }, []);
 
   const exceptionByDate = useMemo(() => {
@@ -343,6 +369,55 @@ export default function OpeningHoursManager() {
       setMaxWeeksMessage({ ok: false, text: "Kunne ikke tilbakestille akkurat nå." });
     } finally {
       setSavingMaxWeeks(false);
+    }
+  }
+
+  async function handleSaveSingleMaxDays(e: FormEvent) {
+    e.preventDefault();
+    setSavingSingleMaxDays(true);
+    setSingleMaxDaysMessage(null);
+
+    try {
+      const res = await fetch("/api/admin/settings/single-booking-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxDaysAhead: singleMaxDays ? Number(singleMaxDays) : null }),
+      });
+      const data = (await res.json()) as { error?: string; maxDaysAhead?: number };
+      if (!res.ok) {
+        setSingleMaxDaysMessage({ ok: false, text: data.error ?? "Kunne ikke lagre." });
+        return;
+      }
+      if (typeof data.maxDaysAhead === "number") setSingleMaxDays(String(data.maxDaysAhead));
+      setSingleMaxDaysMessage({ ok: true, text: "Grense lagret." });
+    } catch {
+      setSingleMaxDaysMessage({ ok: false, text: "Kunne ikke lagre akkurat nå." });
+    } finally {
+      setSavingSingleMaxDays(false);
+    }
+  }
+
+  async function handleResetSingleMaxDays() {
+    setSavingSingleMaxDays(true);
+    setSingleMaxDaysMessage(null);
+
+    try {
+      const res = await fetch("/api/admin/settings/single-booking-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxDaysAhead: null }),
+      });
+      const data = (await res.json()) as { error?: string; maxDaysAhead?: number };
+      if (!res.ok) {
+        setSingleMaxDaysMessage({ ok: false, text: data.error ?? "Kunne ikke tilbakestille." });
+        return;
+      }
+      setSingleMaxDays(typeof data.maxDaysAhead === "number" ? String(data.maxDaysAhead) : "");
+      setSingleMaxDaysMessage({ ok: true, text: `Tilbakestilt til ${MAX_DAYS_AHEAD} dager.` });
+    } catch {
+      setSingleMaxDaysMessage({ ok: false, text: "Kunne ikke tilbakestille akkurat nå." });
+    } finally {
+      setSavingSingleMaxDays(false);
     }
   }
 
@@ -612,6 +687,49 @@ export default function OpeningHoursManager() {
                 onClick={handleClearMaxWeeks}
               >
                 Tilbakestill til {MAX_RECURRING_WEEKS}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      <div className={styles.card}>
+        <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Grense for enkelttimer</h2>
+        <p className={styles.bookingMeta}>
+          Hvor mange dager frem i tid KUNDEN selv kan booke en enkelttime på bookingsiden. Helt uavhengig av grensene
+          for gjentakende bookinger over – påvirker IKKE admins egen manuelle booking her i adminpanelet, som alltid
+          kan booke like langt frem i tid som åpningstidene og kalenderen tillater.
+        </p>
+        {singleMaxDaysLoading ? (
+          <p>Laster …</p>
+        ) : (
+          <form onSubmit={handleSaveSingleMaxDays} className={styles.form}>
+            <div className={styles.formRow}>
+              <label htmlFor="single-max-days">Antall dager frem i tid</label>
+              <input
+                id="single-max-days"
+                type="number"
+                min={1}
+                value={singleMaxDays}
+                onChange={(e) => setSingleMaxDays(e.target.value)}
+              />
+            </div>
+
+            {singleMaxDaysMessage && (
+              <p className={singleMaxDaysMessage.ok ? styles.success : styles.error}>{singleMaxDaysMessage.text}</p>
+            )}
+
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <button type="submit" className={styles.submitButton} disabled={savingSingleMaxDays || !singleMaxDays}>
+                {savingSingleMaxDays ? "Lagrer …" : "Lagre"}
+              </button>
+              <button
+                type="button"
+                className={styles.dangerButton}
+                disabled={savingSingleMaxDays || !singleMaxDays}
+                onClick={handleResetSingleMaxDays}
+              >
+                Tilbakestill til {MAX_DAYS_AHEAD}
               </button>
             </div>
           </form>
