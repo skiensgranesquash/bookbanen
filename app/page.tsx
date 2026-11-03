@@ -6,7 +6,7 @@ import { VENUE_NAME } from "@/lib/config";
 import { getBranding } from "@/lib/settings/branding";
 import { getPricingSettings } from "@/lib/settings/pricing";
 import { getRecurringCutoffDate, getRecurringMaxWeeks } from "@/lib/settings/recurringLimit";
-import { getSingleBookingMaxDaysAhead } from "@/lib/settings/singleBookingLimit";
+import { getEffectiveSingleBookingMaxDate } from "@/lib/settings/singleBookingLimit";
 import { getPageContent } from "@/lib/settings/pageContent";
 
 // Uten denne blir siden statisk forhåndsrenderet ved BUILD-tidspunktet (Next.js
@@ -45,11 +45,11 @@ export async function generateMetadata(): Promise<Metadata> {
  * for en annen klubb/bedrift.
  */
 export default async function SquashBookingPage() {
-  const [branding, recurringCutoffDate, recurringMaxWeeks, maxSingleBookingDaysAhead, pricing, pageContent] = await Promise.all([
+  const [branding, recurringCutoffDate, recurringMaxWeeks, maxSingleBookingDate, pricing, pageContent] = await Promise.all([
     getBranding(),
     getRecurringCutoffDate(),
     getRecurringMaxWeeks(),
-    getSingleBookingMaxDaysAhead(),
+    getEffectiveSingleBookingMaxDate(),
     getPricingSettings(),
     getPageContent(),
   ]);
@@ -99,7 +99,7 @@ export default async function SquashBookingPage() {
       <BookingCalendar
         recurringCutoffDate={recurringCutoffDate}
         recurringMaxWeeks={recurringMaxWeeks}
-        maxSingleBookingDaysAhead={maxSingleBookingDaysAhead}
+        maxSingleBookingDate={maxSingleBookingDate}
         price30MinOre={pricing.price30MinOre}
         price60MinOre={pricing.price60MinOre}
       />

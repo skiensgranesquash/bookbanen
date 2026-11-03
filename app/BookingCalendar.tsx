@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import styles from "./booking.module.css";
 import DatePicker from "./DatePicker";
 import { MAX_RECURRING_WEEKS, SLOT_LENGTH_MINUTES, type BookingDurationMinutes } from "@/lib/config";
-import { maxBookableDate, maxRecurringWeeksUntil, todayInClubTimeZone } from "@/lib/slots";
+import { maxRecurringWeeksUntil, todayInClubTimeZone } from "@/lib/slots";
 import { formatDurationMinutes, formatOslo, formatPriceOre } from "@/lib/formatting";
 import { normalizeNorwegianMobile } from "@/lib/phone";
 import { useSlotMerging, type SlotVisualState } from "@/lib/useSlotMerging";
@@ -25,6 +25,8 @@ interface AvailabilityResponse {
   date: string;
   slots: AvailabilitySlot[];
   closed?: boolean;
+  /** Satt (i stedet for `closed`) når dagen i seg selv er åpen, men ligger forbi vinduet man har lov til å booke en enkelttime innenfor – se app/api/squash/availability/route.ts. IKKE det samme som stengt. */
+  tooFarAhead?: boolean;
   note?: string | null;
   error?: string;
 }
@@ -111,8 +113,8 @@ interface BookingCalendarProps {
   recurringCutoffDate: string | null;
   /** Maks antall uker i en enkelt serie (satt av klubben i adminpanelet), eller null for ingen egen grense (da gjelder kun MAX_RECURRING_WEEKS) – se lib/settings/recurringLimit.ts. Denne og recurringCutoffDate er to UAVHENGIGE grenser som begge gjelder samtidig (den strengeste vinner). */
   recurringMaxWeeks: number | null;
-  /** Hvor mange dager frem i tid en enkelttime har lov til å bookes (satt av klubben i adminpanelet) – se lib/settings/singleBookingLimit.ts. Gjelder KUN kundens egen, selvbetjente enkeltbooking her – admins egen manuelle booking i adminpanelet er unntatt denne grensen. */
-  maxSingleBookingDaysAhead: number;
+  /** Den FAKTISKE siste datoen en enkelttime har lov til å bookes, eller null for ingen grense – allerede ferdig utregnet server-side (enten et eksplisitt antall dager, eller ellers datoen for siste seriebooking) – se lib/settings/singleBookingLimit.ts sin getEffectiveSingleBookingMaxDate. Gjelder KUN kundens egen, selvbetjente enkeltbooking her – en hovedadministrator sin egen manuelle booking i adminpanelet er unntatt denne grensen. */
+  maxSingleBookingDate: string | null;
   /** Dagens priser (i øre), satt av klubben i adminpanelet – se lib/settings/pricing.ts. De to er HELT uavhengige av hverandre (1 time er ikke nødvendigvis dobbelt så dyrt som 30 min). */
   price30MinOre: number;
   price60MinOre: number;
@@ -121,17 +123,17 @@ interface BookingCalendarProps {
 export default function BookingCalendar({
   recurringCutoffDate,
   recurringMaxWeeks,
-  maxSingleBookingDaysAhead,
+  maxSingleBookingDate,
   price30MinOre,
   price60MinOre,
 }: BookingCalendarProps) {
   const today = useMemo(() => todayInClubTimeZone(), []);
-  const maxDate = useMemo(() => maxBookableDate(maxSingleBookingDaysAhead), [maxSingleBookingDaysAhead]);
+  const maxDate = maxSingleBookingDate ?? undefined;
 
   const [date, setDate] = useState(today);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const [closedInfo, setClosedInfo] = useState<{ closed: boolean; note: string | null } | null>(null);
+  const [closedInfo, setClosedInfo] = useState<{ closed: boolean; tooFarAhead: boolean; note: string | null } | null>(null);
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
   // Varigheten kunden har valgt for `selectedLabel` – `null` mens valget
   // venter (rett etter at man har trykket på et klokkeslett, FØR man har
@@ -337,7 +339,7 @@ export default function BookingCalendar({
           setClosedInfo(null);
         } else {
           setSlots(data.slots);
-          setClosedInfo({ closed: !!data.closed, note: data.note ?? null });
+          setClosedInfo({ closed: !!data.closed, tooFarAhead: !!data.tooFarAhead, note: data.note ?? null });
         }
       })
       .catch((err) => {
@@ -481,9 +483,11 @@ export default function BookingCalendar({
         {loadingSlots && <p className={styles.emptyState}>Henter ledige tider …</p>}
         {!loadingSlots && slots.length === 0 && (
           <p className={styles.emptyState}>
-            {closedInfo?.closed
-              ? `Stengt denne dagen${closedInfo.note ? ` (${closedInfo.note})` : ""}.`
-              : "Ingen bookbare tider denne dagen."}
+            {closedInfo?.tooFarAhead
+              ? "Du kan ikke booke en enkelttime så langt frem i tid enda."
+              : closedInfo?.closed
+                ? `Stengt denne dagen${closedInfo.note ? ` (${closedInfo.note})` : ""}.`
+                : "Ingen bookbare tider denne dagen."}
           </p>
         )}
         {!loadingSlots && slots.length > 0 && visibleSlots.length === 0 && (

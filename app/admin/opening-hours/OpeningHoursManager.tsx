@@ -16,7 +16,7 @@ import {
 import { nb } from "date-fns/locale";
 import styles from "../admin.module.css";
 import AdminNav from "../AdminNav";
-import { MAX_DAYS_AHEAD, MAX_RECURRING_WEEKS } from "@/lib/config";
+import { MAX_RECURRING_WEEKS } from "@/lib/config";
 
 type WeekdayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
@@ -163,10 +163,14 @@ export default function OpeningHoursManager() {
 
   // Grense for ENKELTTIMER – hvor mange dager frem i tid KUNDEN selv kan
   // booke en enkelttime på bookingsiden (se
-  // lib/settings/singleBookingLimit.ts). Helt uavhengig av grensene for
-  // gjentakende bookinger over – admins egen manuelle booking i
-  // adminpanelet er IKKE påvirket av denne grensen i det hele tatt (se
-  // app/api/squash/availability/route.ts).
+  // lib/settings/singleBookingLimit.ts). Står feltet tomt, gjelder i stedet
+  // datoen for siste seriebooking (cutoffDate over) som grense for
+  // enkelttimer også – det gir ingen mening at en enkelttime skal ha en
+  // STRENGERE grense enn en gjentakende booking allerede har. En
+  // hovedadministrator (rolle "full") er UNNTATT denne grensen helt når hen
+  // selv booker i adminpanelet (se app/api/squash/availability/route.ts) –
+  // en begrenset "bookings_only"-administrator er derimot bundet av samme
+  // grense som kunden.
   const [singleMaxDays, setSingleMaxDays] = useState("");
   const [singleMaxDaysLoading, setSingleMaxDaysLoading] = useState(true);
   const [savingSingleMaxDays, setSavingSingleMaxDays] = useState(false);
@@ -231,10 +235,10 @@ export default function OpeningHoursManager() {
     fetch("/api/admin/settings/single-booking-limit", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error("Kunne ikke hente grensen.");
-        return res.json() as Promise<{ maxDaysAhead: number }>;
+        return res.json() as Promise<{ maxDaysAhead: number | null }>;
       })
       .then((data) => {
-        setSingleMaxDays(String(data.maxDaysAhead));
+        setSingleMaxDays(data.maxDaysAhead != null ? String(data.maxDaysAhead) : "");
       })
       .catch(() => {
         // Ikke kritisk nok til å blokkere resten av siden – feltet starter bare tomt.
@@ -407,15 +411,15 @@ export default function OpeningHoursManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ maxDaysAhead: null }),
       });
-      const data = (await res.json()) as { error?: string; maxDaysAhead?: number };
+      const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setSingleMaxDaysMessage({ ok: false, text: data.error ?? "Kunne ikke tilbakestille." });
+        setSingleMaxDaysMessage({ ok: false, text: data.error ?? "Kunne ikke fjerne." });
         return;
       }
-      setSingleMaxDays(typeof data.maxDaysAhead === "number" ? String(data.maxDaysAhead) : "");
-      setSingleMaxDaysMessage({ ok: true, text: `Tilbakestilt til ${MAX_DAYS_AHEAD} dager.` });
+      setSingleMaxDays("");
+      setSingleMaxDaysMessage({ ok: true, text: "Grense fjernet – bruker nå datoen for siste seriebooking." });
     } catch {
-      setSingleMaxDaysMessage({ ok: false, text: "Kunne ikke tilbakestille akkurat nå." });
+      setSingleMaxDaysMessage({ ok: false, text: "Kunne ikke fjerne akkurat nå." });
     } finally {
       setSavingSingleMaxDays(false);
     }
@@ -696,9 +700,11 @@ export default function OpeningHoursManager() {
       <div className={styles.card}>
         <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Grense for enkelttimer</h2>
         <p className={styles.bookingMeta}>
-          Hvor mange dager frem i tid KUNDEN selv kan booke en enkelttime på bookingsiden. Helt uavhengig av grensene
-          for gjentakende bookinger over – påvirker IKKE admins egen manuelle booking her i adminpanelet, som alltid
-          kan booke like langt frem i tid som åpningstidene og kalenderen tillater.
+          Hvor mange dager frem i tid KUNDEN selv kan booke en enkelttime på bookingsiden. La feltet stå tomt for å
+          bruke datoen for siste seriebooking over i stedet – en enkelttime skal aldri ha en strengere grense enn en
+          gjentakende booking allerede har. Påvirker IKKE en hovedadministrator sin egen manuelle booking her i
+          adminpanelet, som alltid kan booke like langt frem i tid som åpningstidene og kalenderen tillater – en
+          begrenset administrator er derimot bundet av samme grense som kunden.
         </p>
         {singleMaxDaysLoading ? (
           <p>Laster …</p>
@@ -710,6 +716,7 @@ export default function OpeningHoursManager() {
                 id="single-max-days"
                 type="number"
                 min={1}
+                placeholder="Tomt = bruk datoen for siste seriebooking"
                 value={singleMaxDays}
                 onChange={(e) => setSingleMaxDays(e.target.value)}
               />
@@ -729,7 +736,7 @@ export default function OpeningHoursManager() {
                 disabled={savingSingleMaxDays || !singleMaxDays}
                 onClick={handleResetSingleMaxDays}
               >
-                Tilbakestill til {MAX_DAYS_AHEAD}
+                Fjern grense
               </button>
             </div>
           </form>

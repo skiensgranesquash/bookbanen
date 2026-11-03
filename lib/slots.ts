@@ -91,15 +91,19 @@ export function maxBookableDate(maxDaysAhead: number = MAX_DAYS_AHEAD): string {
 }
 
 /**
- * Om en dato er innenfor vinduet man har lov til å booke en enkelttime.
- * Se `maxBookableDate` over for hva `maxDaysAhead` betyr – admins egne
- * bookinger (se app/api/squash/availability/route.ts) bruker IKKE denne
- * grensen i det hele tatt lenger, siden den kun gjelder kundens
- * selvbetjente enkeltbooking.
+ * Om en dato er innenfor vinduet man har lov til å booke en enkelttime –
+ * `maxDate` er den FAKTISKE, allerede utregnede siste bookbare datoen (se
+ * lib/settings/singleBookingLimit.ts sin getEffectiveSingleBookingMaxDate),
+ * IKKE et antall dager. `null` (standard) betyr ingen øvre grense i det
+ * hele tatt. En "hovedadministrator" (rolle "full", se
+ * app/api/squash/availability/route.ts) er UNNTATT denne grensen helt når
+ * hen selv booker – den gjelder kun kundens selvbetjente enkeltbooking (og
+ * en begrenset "bookings_only"-administrator).
  */
-export function isDateBookable(dateStr: string, maxDaysAhead: number = MAX_DAYS_AHEAD): boolean {
+export function isDateBookable(dateStr: string, maxDate: string | null = null): boolean {
   if (!isValidBookingDateString(dateStr)) return false;
-  return dateStr >= todayInClubTimeZone() && dateStr <= maxBookableDate(maxDaysAhead);
+  if (dateStr < todayInClubTimeZone()) return false;
+  return maxDate === null || dateStr <= maxDate;
 }
 
 function pad(n: number): string {

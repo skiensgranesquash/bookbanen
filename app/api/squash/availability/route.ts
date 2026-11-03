@@ -4,8 +4,8 @@ import { expireStaleHolds } from "@/lib/holds";
 import { COURT_ID } from "@/lib/config";
 import { SESSION_COOKIE_NAME, verifySessionCookieValue } from "@/lib/auth/session";
 import { getEffectiveHoursForDate } from "@/lib/settings/openingHours";
-import { getSingleBookingMaxDaysAhead } from "@/lib/settings/singleBookingLimit";
-import { generateSlotsForDate, isDateBookable, isValidBookingDateString } from "@/lib/slots";
+import { getEffectiveSingleBookingMaxDate } from "@/lib/settings/singleBookingLimit";
+import { generateSlotsForDate, isValidBookingDateString, todayInClubTimeZone } from "@/lib/slots";
 
 export const dynamic = "force-dynamic";
 
@@ -50,18 +50,30 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Admins EGEN innloggede sesjon er UNNTATT grensen for "hvor mange dager
-  // frem i tid" under – den gjelder kun kundens selvbetjente enkeltbooking
-  // på bookingsiden, ikke adminpanelets manuelle booking (som henter ledige
-  // tider fra nettopp dette endepunktet, se app/admin/BookingsInsights.tsx).
-  // Uten dette unntaket ble admin feilaktig møtt med "stengt denne dagen" på
-  // alle datoer forbi grensen, selv når banen i realiteten var åpen.
+  // En "hovedadministrator" (rolle "full", se AdminRole i lib/db/types.ts)
+  // sin EGEN innloggede sesjon er UNNTATT grensen under helt – den gjelder
+  // kun kundens selvbetjente enkeltbooking på bookingsiden (og en begrenset
+  // "bookings_only"-administrator), ikke en hovedadministrators egen
+  // manuelle booking i adminpanelet (som henter ledige tider fra nettopp
+  // dette endepunktet, se app/admin/BookingsInsights.tsx). Uten dette
+  // unntaket ble admin feilaktig møtt med "stengt denne dagen" på alle
+  // datoer forbi grensen, selv når banen i realiteten var åpen.
   const adminSession = await verifySessionCookieValue(request.cookies.get(SESSION_COOKIE_NAME)?.value);
+  const isFullAdmin = adminSession?.role === "full";
 
-  if (!adminSession) {
-    const maxDaysAhead = await getSingleBookingMaxDaysAhead();
-    if (!isDateBookable(dateStr, maxDaysAhead)) {
+  if (!isFullAdmin) {
+    if (dateStr < todayInClubTimeZone()) {
       return NextResponse.json({ date: dateStr, slots: [], closed: true, note: null });
+    }
+
+    // VIKTIG: dette er IKKE det samme som at banen er "stengt" denne dagen
+    // – den er fysisk åpen akkurat som vanlig, det er bare ikke lov å booke
+    // en ENKELTTIME så langt frem i tid (ennå). Får derfor sitt EGET flagg
+    // (`tooFarAhead`) i stedet for å late som dagen er stengt, slik at
+    // bookingsiden kan vise en korrekt melding (se BookingCalendar.tsx).
+    const maxDate = await getEffectiveSingleBookingMaxDate();
+    if (maxDate !== null && dateStr > maxDate) {
+      return NextResponse.json({ date: dateStr, slots: [], closed: false, tooFarAhead: true, note: null });
     }
   }
 

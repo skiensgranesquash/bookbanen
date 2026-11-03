@@ -25,7 +25,7 @@ import { getPaymentProviderImpl } from "@/lib/payments";
 import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHours";
 import { getPricingSettings, priceForDuration } from "@/lib/settings/pricing";
 import { getRecurringCutoffDate, getRecurringMaxWeeks } from "@/lib/settings/recurringLimit";
-import { getSingleBookingMaxDaysAhead } from "@/lib/settings/singleBookingLimit";
+import { getEffectiveSingleBookingMaxDate } from "@/lib/settings/singleBookingLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Ugyldig dato." }, { status: 400 });
   }
   if (mode === "single") {
-    const maxDaysAhead = await getSingleBookingMaxDaysAhead();
-    if (!isDateBookable(date, maxDaysAhead)) {
+    const maxDate = await getEffectiveSingleBookingMaxDate();
+    if (!isDateBookable(date, maxDate)) {
       return NextResponse.json({ error: "Datoen er ikke bookbar." }, { status: 400 });
     }
   }
