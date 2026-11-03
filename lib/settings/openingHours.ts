@@ -1,6 +1,18 @@
 import "server-only";
 import { getRepository } from "@/lib/db";
 import { CLOSING_HOUR, OPENING_HOUR } from "@/lib/config";
+import {
+  WEEKDAY_KEYS,
+  WEEKDAY_LABELS,
+  effectiveHoursForDate,
+  type WeekdayKey,
+  type TimeInterval,
+  type DayHours,
+  type WeeklyHours,
+  type CalendarException,
+  type EffectiveHours,
+  type HoursContext,
+} from "@/lib/openingHoursShared";
 
 /**
  * Åpningstider satt via adminpanelet, lagret i den samme generiske
@@ -22,59 +34,19 @@ import { CLOSING_HOUR, OPENING_HOUR } from "@/lib/config";
  * `generateSlotsForDate` (lib/slots.ts) genererer rutenett-tidsluker separat
  * for hvert tidsrom, slik at det automatisk blir et "hull" i rutenettet
  * mellom dem – ingen booking kan starte slik at den ville krysset pausen.
+ *
+ * De rene typene (WeekdayKey, TimeInterval, DayHours, WeeklyHours,
+ * CalendarException, EffectiveHours, HoursContext) og selve
+ * effectiveHoursForDate-utregningen bor nå i lib/openingHoursShared.ts (se
+ * import over) – IKKE her – siden den filen ikke har "server-only" og derfor
+ * kan brukes direkte fra en klient-komponent (app/admin/BookingsInsights.tsx
+ * sin røde markering av stengte dager, og forhåndsvisningen av en
+ * gjentakende rekke FØR "Book rekken" trykkes). Alt derfra eksporteres
+ * videre fra denne filen (export * under), slik at ingen av de eksisterende
+ * importene fra "@/lib/settings/openingHours" andre steder i kodebasen
+ * (API-rutene som faktisk snakker med databasen) måtte endres.
  */
-
-export type WeekdayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
-
-export const WEEKDAY_KEYS: WeekdayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-
-export const WEEKDAY_LABELS: Record<WeekdayKey, string> = {
-  mon: "Mandag",
-  tue: "Tirsdag",
-  wed: "Onsdag",
-  thu: "Torsdag",
-  fri: "Fredag",
-  sat: "Lørdag",
-  sun: "Søndag",
-};
-
-/** Ett sammenhengende åpent tidsrom innenfor én kalenderdag, "HH:mm"–"HH:mm". */
-export interface TimeInterval {
-  open: string;
-  close: string;
-}
-
-export interface DayHours {
-  closed: boolean;
-  /** Ett eller flere ikke-overlappende tidsrom, sortert stigende. Tom array når closed=true. */
-  intervals: TimeInterval[];
-}
-
-export type WeeklyHours = Record<WeekdayKey, DayHours>;
-
-export interface CalendarException {
-  /** "YYYY-MM-DD". */
-  date: string;
-  closed: boolean;
-  /** Tom array når closed=true. */
-  intervals: TimeInterval[];
-  /** Forklaring vist i adminpanelet (og i "stengt"-meldingen på bookingsiden). */
-  note: string;
-}
-
-export interface EffectiveHours {
-  closed: boolean;
-  /** Tom array når closed=true (eller når dagen – i teorien – ikke har noen gyldige tidsrom). */
-  intervals: TimeInterval[];
-  note: string | null;
-  /** Om dette kommer fra en "ferie/annerledesdag"-unntak (ikke bare ukedagens standard). */
-  isException: boolean;
-}
-
-export interface HoursContext {
-  weekly: WeeklyHours;
-  exceptions: CalendarException[];
-}
+export * from "@/lib/openingHoursShared";
 
 const WEEKLY_KEY = "weeklyOpeningHours";
 const EXCEPTIONS_KEY = "calendarExceptions";
@@ -290,40 +262,10 @@ export async function removeExceptionsForDates(dates: string[]): Promise<Calenda
   return next;
 }
 
-function weekdayKeyFor(dateStr: string): WeekdayKey {
-  // Ukedagen til en kalenderdato er tidssone-uavhengig (datoen er allerede en
-  // lokal "YYYY-MM-DD" i klubbens tidssone) – ren UTC-aritmetikk holder.
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const jsDay = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=søn..6=lør
-  const map: WeekdayKey[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  return map[jsDay];
-}
-
 /** Henter begge innstillings-lagene i ÉT oppslag – bruk denne (ikke getEffectiveHoursForDate i en løkke) når flere datoer skal sjekkes i samme forespørsel, f.eks. en gjentakende booking over mange uker. */
 export async function getHoursContext(): Promise<HoursContext> {
   const [weekly, exceptions] = await Promise.all([getWeeklyHours(), getExceptions()]);
   return { weekly, exceptions };
-}
-
-/** Ren (synkron) utregning av effektive åpningstider for én dato, gitt en allerede innhentet HoursContext. */
-export function effectiveHoursForDate(dateStr: string, context: HoursContext): EffectiveHours {
-  const exception = context.exceptions.find((e) => e.date === dateStr);
-  if (exception) {
-    return {
-      closed: exception.closed,
-      intervals: exception.intervals,
-      note: exception.note || null,
-      isException: true,
-    };
-  }
-
-  const day = context.weekly[weekdayKeyFor(dateStr)];
-  return {
-    closed: day.closed,
-    intervals: day.intervals,
-    note: null,
-    isException: false,
-  };
 }
 
 /** Bekvemmelighetsfunksjon for når man kun trenger ÉN dato (f.eks. /api/squash/availability). */

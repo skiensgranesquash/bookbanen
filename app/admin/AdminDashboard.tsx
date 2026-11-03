@@ -7,6 +7,7 @@ import styles from "./admin.module.css";
 import { formatOslo, formatPriceOre } from "@/lib/formatting";
 import BookingsInsights, { Leaderboard } from "./BookingsInsights";
 import AdminNav from "./AdminNav";
+import type { HoursContext } from "@/lib/openingHoursShared";
 
 export type Status = "pending" | "confirmed" | "cancelled" | "expired";
 export type Kind = "single" | "recurring" | "block";
@@ -108,6 +109,13 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [recurringCutoff, setRecurringCutoff] = useState<string | null>(null);
+  // Åpningstidene (ukentlig standard + unntak) – hentes via
+  // /api/admin/bookings/hours (IKKE /api/admin/settings/hours, som en
+  // "bookings_only"-administrator ikke får kalle, se middleware.ts) og gis
+  // videre til BookingsInsights, som markerer stengte dager med rødt i
+  // kalenderen OG forhåndsviser en gjentakende rekkes datoer FØR "Book
+  // rekken" trykkes.
+  const [hoursContext, setHoursContext] = useState<HoursContext | null>(null);
 
   const loadBookings = useCallback(async () => {
     setLoading(true);
@@ -153,6 +161,20 @@ export default function AdminDashboard() {
       });
   }, []);
 
+  // Samme "ikke kritisk"-mønster som over – mislykkes hentingen, viser
+  // kalenderen bare ingen rød markering for stengte dager (se
+  // BookingsInsights.tsx), i stedet for å feile noe annet.
+  useEffect(() => {
+    fetch("/api/admin/bookings/hours", { cache: "no-store" })
+      .then((res) => (res.ok ? (res.json() as Promise<HoursContext>) : null))
+      .then((data) => {
+        if (data) setHoursContext(data);
+      })
+      .catch(() => {
+        // Ikke kritisk – se kommentaren over.
+      });
+  }, []);
+
   async function handleCancel(id: string, label: string) {
     if (!window.confirm(`Avlyse "${label}"? Dette kan ikke angres.`)) return;
 
@@ -189,7 +211,12 @@ export default function AdminDashboard() {
           <RecurringCutoffReminder cutoffDate={recurringCutoff} />
 
           {!loading && !error && (
-            <BookingsInsights bookings={bookings} onChanged={loadBookings} onCancel={handleCancel} />
+            <BookingsInsights
+              bookings={bookings}
+              onChanged={loadBookings}
+              onCancel={handleCancel}
+              hoursContext={hoursContext}
+            />
           )}
 
           <div className={styles.threeColRow}>

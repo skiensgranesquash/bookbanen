@@ -873,6 +873,19 @@
   border-left: 2.5px solid var(--brand);
 }
 
+/** Stengt denne dagen (ukedagens standard, eller en
+    "ferie/annerledesdag"-unntak) – se effectiveHoursForDate i
+    lib/openingHoursShared.ts. Plassert FØR bcDayToday/bcDaySelected her i
+    filen med vilje, slik at de fortsatt vinner over denne svake rød-tonen
+    når en stengt dag også er i dag/valgt. */
+.bcDayClosed {
+  background: var(--conflict-bg);
+}
+
+.bcDayClosed .bcDayNumber {
+  color: var(--danger-dark);
+}
+
 .bcDayToday {
   border-color: var(--brand-yellow);
   border-width: 1.5px;
@@ -1451,4 +1464,38 @@
   border-color: var(--brand);
   background: var(--brand);
   color: white;
+}
+
+/* ---- Forhåndsvisning av en gjentakende rekkes datoer (admin sin "Book
+   rekken"-modal) – samme klassenavn/stil som den offentlige bookingsiden
+   sin egen forhåndsvisning (se app/booking.module.css), slik at stengte
+   dager i rekken er synlige FØR man trykker "Book rekken". ---- */
+.previewList {
+  margin-top: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.previewRowOk,
+.previewRowConflict {
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.previewRowOk {
+  background: var(--ok-bg);
+}
+
+.previewRowConflict {
+  background: var(--conflict-bg);
+  color: var(--danger-dark);
+  font-weight: 600;
+}
+
+.previewRowOk:last-child,
+.previewRowConflict:last-child {
+  border-bottom: none;
 }

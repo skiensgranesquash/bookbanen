@@ -15,9 +15,10 @@ import {
 import { nb } from "date-fns/locale";
 import styles from "./admin.module.css";
 import { formatOslo } from "@/lib/formatting";
-import { MAX_RECURRING_WEEKS, SLOT_LENGTH_MINUTES } from "@/lib/config";
-import { todayInClubTimeZone } from "@/lib/slots";
+import { durationMinutesToSlots, MAX_RECURRING_WEEKS, SLOT_LENGTH_MINUTES } from "@/lib/config";
+import { generateWeeklyDates, isWithinOpeningHours, occurrenceRange, todayInClubTimeZone } from "@/lib/slots";
 import { useSlotMerging, type SlotVisualState } from "@/lib/useSlotMerging";
+import { effectiveHoursForDate, type HoursContext } from "@/lib/openingHoursShared";
 import type { BookingRow } from "./AdminDashboard";
 
 const CAL_WEEKDAY_HEADERS = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
@@ -188,6 +189,16 @@ interface BookingsInsightsProps {
   onChanged: () => void;
   /** Avlyser en booking (samme funksjon som brukes i bookinglisten nederst – viser bekreftelsesdialog og refunderer ved behov). */
   onCancel: (id: string, label: string) => Promise<void>;
+  /**
+   * Hele åpningstids-konteksten (ukentlig standard + alle
+   * ferie/annerledesdag-unntak), hentet av AdminDashboard via
+   * /api/admin/bookings/hours – brukes til å markere stengte dager med rødt
+   * i kalenderen under, OG til å forhåndsvise en gjentakende rekkes datoer
+   * FØR "Book rekken" trykkes. `null` mens den fortsatt lastes (eller hvis
+   * hentingen mislyktes) – kalenderen viser da bare ingen rød markering,
+   * uten å blokkere noe annet.
+   */
+  hoursContext: HoursContext | null;
 }
 
 /** Starten (mandag) på "inneværende uke" – basert på klubbens egen tidssone (samme kilde som selectedDate under), ikke nettleserens lokale klokke. */
@@ -198,7 +209,7 @@ function currentWeekStart(): Date {
 /** Antall uker kalenderen viser: inneværende uke + de 4 neste – et fast, ikke-bladbart vindu (ingen historikk), se BookingsInsights.tsx sin bruk av dette under. */
 const CALENDAR_WEEKS = 5;
 
-export default function BookingsInsights({ bookings, onChanged, onCancel }: BookingsInsightsProps) {
+export default function BookingsInsights({ bookings, onChanged, onCancel, hoursContext }: BookingsInsightsProps) {
   const [selectedDate, setSelectedDate] = useState(() => todayInClubTimeZone());
 
   // Hvilken "side" av det faste CALENDAR_WEEKS-vinduet som vises - 0 er
@@ -600,9 +611,32 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
     }
   }
 
+  // Forhåndsviser de FAKTISKE datoene en gjentakende rekke ville dekket, og
+  // flagger hvilke av dem som er stengt (ukedagens standard, eller en
+  // "ferie/annerledesdag"-unntak) – FØR admin trykker "Book rekken", i
+  // stedet for å måtte trykke og få en feilmelding for å finne det ut (se
+  // app/api/admin/bookings/manual/route.ts, som avviser HELE rekken hvis ÉN
+  // eneste dato er stengt). Ren klient-side utregning fra den allerede
+  // innhentede HoursContext – ingen eget nettverkskall, samme mønster som
+  // den offentlige bookingsiden sin egen /api/squash/recurring-preview (se
+  // app/BookingCalendar.tsx), men uten den selvbetjenings-grensen
+  // (recurringCutoffDate) admin selv er unntatt fra.
+  const recurringSeriesPreview =
+    modal !== null && modal.mode === "create" && manualRecurring && manualTime && hoursContext
+      ? generateWeeklyDates(modal.date, manualWeeks).map((date) => {
+          const durationSlots = durationMinutesToSlots(manualDurationMinutes);
+          const range = occurrenceRange(date, manualTime, durationSlots);
+          const hours = effectiveHoursForDate(date, hoursContext);
+          const closed = !range || !isWithinOpeningHours(range.startTime, range.endTime, hours);
+          return { date, closed, note: hours.note };
+        })
+      : null;
+  const recurringSeriesHasClosedDay = recurringSeriesPreview?.some((o) => o.closed) ?? false;
+
   const submitDisabled =
     manualSubmitting ||
     (needsSlotGrid && !manualTime) ||
+    (modal !== null && modal.mode === "create" && manualRecurring && recurringSeriesHasClosedDay) ||
     (modal !== null && modal.mode === "create" && manualRequestPayment && !manualPhone.trim());
 
   return (
@@ -685,9 +719,19 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
               const altMonth = monthsFromStart % 2 === 1;
               const isMonthStart = dayIndex > 0 && day.getDate() === 1;
 
+              // Stengt denne dagen (ukedagens standard, eller en
+              // "ferie/annerledesdag"-unntak) – ren, synkron utregning fra
+              // den allerede innhentede HoursContext (se
+              // app/api/admin/bookings/hours/route.ts), ingen nettverkskall
+              // per dag. `hoursContext` er null helt til den første hentingen
+              // er ferdig (eller hvis den mislyktes) – da vises bare ingen
+              // rød markering, som før denne funksjonen fantes.
+              const isClosedDay = hoursContext ? effectiveHoursForDate(dateStr, hoursContext).closed : false;
+
               const classNames = [styles.bcDay];
               if (altMonth) classNames.push(styles.bcDayAltMonth);
               if (isMonthStart) classNames.push(styles.bcDayMonthStart);
+              if (isClosedDay) classNames.push(styles.bcDayClosed);
               if (isPastDay) classNames.push(styles.bcDayPast);
               if (isToday) classNames.push(styles.bcDayToday);
               if (isSelected) classNames.push(styles.bcDaySelected);
@@ -753,6 +797,10 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
             <span>
               <span className={styles.calLegendDot} style={{ background: "var(--danger-dark)" }} />
               Mislyktes (avlyst/utløpt)
+            </span>
+            <span>
+              <span className={styles.calLegendDot} style={{ background: "var(--danger-dark)" }} />
+              Stengt
             </span>
           </div>
 
@@ -1017,6 +1065,23 @@ export default function BookingsInsights({ bookings, onChanged, onCancel }: Book
                         setManualWeeks(Math.max(1, Math.min(MAX_RECURRING_WEEKS, Number(e.target.value) || 1)))
                       }
                     />
+                    {recurringSeriesPreview && (
+                      <div className={styles.previewList}>
+                        {recurringSeriesPreview.map((o) => (
+                          <div key={o.date} className={o.closed ? styles.previewRowConflict : styles.previewRowOk}>
+                            {format(parseDateOnly(o.date), "EEEE d. MMM", { locale: nb })}
+                            {" – "}
+                            {o.closed ? `stengt${o.note ? ` (${o.note})` : ""}` : "åpent"}
+                          </div>
+                        ))}
+                        {recurringSeriesHasClosedDay && (
+                          <p className={styles.error}>
+                            Én eller flere datoer i rekken er stengt – hele rekken kan ikke bookes før klokkeslett
+                            eller antall uker er justert.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
