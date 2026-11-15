@@ -8,5 +8,9 @@ export async function GET(request: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Ikke innlogget." }, { status: 401 });
   }
-  return NextResponse.json({ name: session.name, email: session.email, role: session.role });
+  // `id` (session.sub) er med slik at Administratorer-fanen (se
+  // AccountSettings.tsx) kan vite hvilken rad i listen er "meg selv" og
+  // skjule Rediger/Slett der - handheves uansett pa nytt server-side i
+  // app/api/admin/account/users/[id]/route.ts, uavhengig av hva UI-et viser.
+  return NextResponse.json({ id: session.sub, name: session.name, email: session.email, role: session.role });
 }

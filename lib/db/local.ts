@@ -461,6 +461,29 @@ export const localRepository: BookingRepository = {
     });
   },
 
+  async updateAdminUser(id, patch) {
+    return withLock(async () => {
+      const db = await loadDb();
+      const user = db.adminUsers.find((u) => u.id === id);
+      if (!user) throw new Error("Fant ingen admin-bruker med denne iden.");
+      if (patch.name !== undefined) user.name = patch.name;
+      if (patch.email !== undefined) user.email = patch.email;
+      if (patch.role !== undefined) user.role = patch.role;
+      await saveDb(db);
+      return normalizeAdminUser(user);
+    });
+  },
+
+  async deleteAdminUser(id) {
+    return withLock(async () => {
+      const db = await loadDb();
+      const exists = db.adminUsers.some((u) => u.id === id);
+      if (!exists) throw new Error("Fant ingen admin-bruker med denne iden.");
+      db.adminUsers = db.adminUsers.filter((u) => u.id !== id);
+      await saveDb(db);
+    });
+  },
+
   async getSetting(key) {
     const db = await loadDb();
     return db.settings[key] ?? null;

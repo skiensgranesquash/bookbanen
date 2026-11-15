@@ -570,6 +570,49 @@ export const supabaseRepository: BookingRepository = {
     if (error) throw new Error(`Kunne ikke oppdatere passord: ${error.message}`);
   },
 
+  async updateAdminUser(id, patch) {
+    const supabase = getSupabaseAdmin();
+    // Satt sammen med spredning (ikke en mellomliggende Record<string,string>-
+    // variabel) slik at TypeScript kan sjekke resultatet direkte mot den
+    // håndskrevne admin_users-Update-typen i database.types.ts – samme
+    // årsak som typecheck-feilen opponent_name ga i turneringsrunden.
+    const { data, error } = await supabase
+      .from("admin_users")
+      .update({
+        ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.email !== undefined ? { email: patch.email.toLowerCase() } : {}),
+        ...(patch.role !== undefined ? { role: patch.role } : {}),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw new Error(`Kunne ikke oppdatere admin-bruker: ${error.message}`);
+    const row = data as {
+      id: string;
+      email: string;
+      name: string;
+      password_hash: string;
+      password_salt: string;
+      role: string | null;
+      created_at: string;
+    };
+    return {
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      passwordHash: row.password_hash,
+      passwordSalt: row.password_salt,
+      role: (row.role as AdminRole | null) ?? "full",
+      createdAt: row.created_at,
+    };
+  },
+
+  async deleteAdminUser(id) {
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("admin_users").delete().eq("id", id);
+    if (error) throw new Error(`Kunne ikke slette admin-bruker: ${error.message}`);
+  },
+
   async getSetting(key) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.from("app_settings").select("value").eq("key", key).maybeSingle();

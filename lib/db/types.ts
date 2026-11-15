@@ -249,6 +249,23 @@ export interface BookingRepository {
   updateAdminPassword(id: string, passwordHash: string, passwordSalt: string): Promise<void>;
 
   /**
+   * Endrer navn/e-post/rolle på en eksisterende admin-bruker (brukt fra
+   * "Rediger" i Administratorer-fanen, se app/admin/account/AccountSettings.tsx).
+   * Kalleren (API-ruten i app/api/admin/account/users/[id]/route.ts) har
+   * allerede sjekket e-post-kollisjon, at man ikke endrer sin egen rolle, og
+   * "siste fulle administrator"-regelen – dette laget utfører bare selve
+   * endringen. Kaster hvis brukeren ikke finnes.
+   */
+  updateAdminUser(id: string, patch: { name?: string; email?: string; role?: AdminRole }): Promise<AdminUser>;
+
+  /**
+   * Sletter en admin-bruker. Kalleren har allerede sjekket at det ikke er
+   * brukeren selv, og at det ikke er siste fulle administrator. Kaster hvis
+   * brukeren ikke finnes.
+   */
+  deleteAdminUser(id: string): Promise<void>;
+
+  /**
    * Enkel nøkkel/verdi-lagring for innstillinger satt via adminpanelet (f.eks.
    * Vipps-nøkler). Verdien er alltid en streng – ansvaret for evt. kryptering
    * av sensitivt innhold ligger hos kalleren (se lib/secrets.ts +

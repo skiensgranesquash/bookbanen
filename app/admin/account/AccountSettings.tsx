@@ -26,6 +26,8 @@ export default function AccountSettings() {
   // administratorer eller kunne opprette flere, se middleware.ts for den
   // faktiske håndhevingen av dette) ---
   const [ownRole, setOwnRole] = useState<AdminRole | null>(null);
+  /** Egen bruker-id (session.sub, se /api/admin/me) - brukes til å skjule Rediger/Slett på egen rad under. */
+  const [ownId, setOwnId] = useState<string | null>(null);
 
   // --- Admin-brukere ---
   const [users, setUsers] = useState<AdminUserRow[]>([]);
@@ -38,6 +40,80 @@ export default function AccountSettings() {
   const [newUserPasswordConfirm, setNewUserPasswordConfirm] = useState("");
   const [creatingUser, setCreatingUser] = useState(false);
   const [createMessage, setCreateMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // --- Rediger/slett en EKSISTERENDE admin-bruker (aldri egen rad, se ownId) ---
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editRole, setEditRole] = useState<AdminRole>("full");
+  const [editPassword, setEditPassword] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editMessage, setEditMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  function startEdit(u: AdminUserRow) {
+    setEditingId(u.id);
+    setEditName(u.name);
+    setEditEmail(u.email);
+    setEditRole(u.role);
+    setEditPassword("");
+    setEditMessage(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditMessage(null);
+  }
+
+  async function handleSaveEdit(e: FormEvent, id: string) {
+    e.preventDefault();
+    setSavingEdit(true);
+    setEditMessage(null);
+    try {
+      const body: { name: string; email: string; role: AdminRole; password?: string } = {
+        name: editName,
+        email: editEmail,
+        role: editRole,
+      };
+      if (editPassword.trim().length > 0) body.password = editPassword;
+
+      const res = await fetch(`/api/admin/account/users/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as { error?: string };
+
+      if (!res.ok) {
+        setEditMessage({ ok: false, text: data.error ?? "Kunne ikke lagre." });
+        return;
+      }
+
+      setEditingId(null);
+      await loadUsers();
+    } catch {
+      setEditMessage({ ok: false, text: "Kunne ikke lagre akkurat nå." });
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleDeleteUser(u: AdminUserRow) {
+    if (!window.confirm(`Slette admin-brukeren "${u.name}" (${u.email})? Dette kan ikke angres.`)) return;
+
+    setDeletingId(u.id);
+    try {
+      const res = await fetch(`/api/admin/account/users/${u.id}`, { method: "DELETE" });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        window.alert(data.error ?? "Kunne ikke slette brukeren.");
+        return;
+      }
+      await loadUsers();
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function loadUsers() {
     setLoadingUsers(true);
@@ -52,10 +128,11 @@ export default function AccountSettings() {
 
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
-      .then((res) => (res.ok ? (res.json() as Promise<{ role?: AdminRole }>) : null))
+      .then((res) => (res.ok ? (res.json() as Promise<{ id?: string; role?: AdminRole }>) : null))
       .then((data) => {
         const role = data?.role ?? "full";
         setOwnRole(role);
+        setOwnId(data?.id ?? null);
         // En begrenset administrator har uansett ikke tilgang til
         // /api/admin/account/users (se middleware.ts), så det er ingen vits
         // i å prøve å laste listen for dem.
@@ -131,13 +208,98 @@ export default function AccountSettings() {
             <div className={styles.userList}>
               {users.map((u) => (
                 <div key={u.id} className={styles.userRow}>
-                  <div>
-                    <strong>{u.name}</strong>
-                    <div className={styles.bookingMeta}>{u.email}</div>
-                  </div>
-                  <div className={styles.bookingMeta}>
-                    {ROLE_LABEL[u.role]} &middot; lagt til {formatOslo(u.createdAt, "d. MMM yyyy")}
-                  </div>
+                  {editingId === u.id ? (
+                    <form onSubmit={(e) => handleSaveEdit(e, u.id)} className={styles.form} style={{ width: "100%" }}>
+                      <div className={styles.formRow}>
+                        <label htmlFor={`edit-name-${u.id}`}>Navn</label>
+                        <input
+                          id={`edit-name-${u.id}`}
+                          type="text"
+                          required
+                          minLength={2}
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                        />
+                      </div>
+                      <div className={styles.formRow}>
+                        <label htmlFor={`edit-email-${u.id}`}>E-post</label>
+                        <input
+                          id={`edit-email-${u.id}`}
+                          type="email"
+                          required
+                          value={editEmail}
+                          onChange={(e) => setEditEmail(e.target.value)}
+                          autoComplete="off"
+                        />
+                      </div>
+                      <div className={styles.formRow}>
+                        <label htmlFor={`edit-role-${u.id}`}>Rolle</label>
+                        <select
+                          id={`edit-role-${u.id}`}
+                          value={editRole}
+                          onChange={(e) => setEditRole(e.target.value as AdminRole)}
+                        >
+                          <option value="full">Full administrator</option>
+                          <option value="bookings_only">Begrenset (kun Bookinger)</option>
+                        </select>
+                      </div>
+                      <div className={styles.formRow}>
+                        <label htmlFor={`edit-password-${u.id}`}>Nytt passord (valgfritt)</label>
+                        <input
+                          id={`edit-password-${u.id}`}
+                          type="password"
+                          minLength={8}
+                          value={editPassword}
+                          onChange={(e) => setEditPassword(e.target.value)}
+                          autoComplete="new-password"
+                          placeholder="La stå tom for å ikke endre"
+                        />
+                      </div>
+
+                      {editMessage && (
+                        <p className={editMessage.ok ? styles.success : styles.error}>{editMessage.text}</p>
+                      )}
+
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button type="submit" className={styles.submitButton} disabled={savingEdit}>
+                          {savingEdit ? "Lagrer …" : "Lagre"}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.secondaryButton}
+                          onClick={cancelEdit}
+                          disabled={savingEdit}
+                        >
+                          Avbryt
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div>
+                        <strong>{u.name}</strong>
+                        <div className={styles.bookingMeta}>{u.email}</div>
+                      </div>
+                      <div className={styles.bookingMeta}>
+                        {ROLE_LABEL[u.role]} &middot; lagt til {formatOslo(u.createdAt, "d. MMM yyyy")}
+                      </div>
+                      {u.id !== ownId && (
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button type="button" className={styles.secondaryButton} onClick={() => startEdit(u)}>
+                            Rediger
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.dangerButton}
+                            disabled={deletingId === u.id}
+                            onClick={() => handleDeleteUser(u)}
+                          >
+                            {deletingId === u.id ? "Sletter …" : "Slett"}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               ))}
             </div>
