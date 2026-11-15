@@ -43,9 +43,9 @@ function emptyDb(): DbShape {
   return { bookingGroups: [], bookingSlots: [], adminUsers: [], settings: {} };
 }
 
-/** Eldre lagrede bookinger (fra før `source`-feltet fantes) mangler feltet – de regnes som vanlige kundebookinger. */
+/** Eldre lagrede bookinger (fra før `source`/`opponentName`-feltene fantes) mangler dem – `source` regnes da som en vanlig kundebooking, `opponentName` som null (ikke en turneringsbooking). */
 function normalizeGroup(group: BookingGroup): BookingGroup {
-  return { ...group, source: group.source ?? "customer" };
+  return { ...group, source: group.source ?? "customer", opponentName: group.opponentName ?? null };
 }
 
 /** Eldre lagrede admin-brukere (fra før `role`-feltet fantes) mangler feltet – de regnes som fulle administratorer, akkurat som de alltid har vært. */
@@ -144,6 +144,7 @@ async function createGroupWithSlotsInternal(
     paymentReference: input.id,
     holdExpiresAt: input.holdExpiresAt,
     note: input.note ?? null,
+    opponentName: input.opponentName ?? null,
     createdAt: now,
     updatedAt: now,
   };
@@ -308,6 +309,34 @@ export const localRepository: BookingRepository = {
 
       if (result.ok) {
         // Bindende med en gang – admin booker uten betaling, akkurat som en blokkering.
+        const created = nextDb.bookingGroups.find((g) => g.id === result.group.id);
+        if (created) created.status = "confirmed";
+        result.group.status = "confirmed";
+        await saveDb(nextDb);
+      }
+
+      return result;
+    });
+  },
+
+  async createTournamentBooking({ customerName, opponentName, range }) {
+    return withLock(async () => {
+      const db = await loadDb();
+      const { db: nextDb, result } = await createGroupWithSlotsInternal(db, {
+        id: randomUUID(),
+        kind: "single",
+        source: "customer",
+        customerName,
+        customerPhone: "",
+        totalAmountOre: 0,
+        holdExpiresAt: null,
+        note: null,
+        opponentName,
+        slots: [{ courtId: "1", startTime: range.startTime, endTime: range.endTime }],
+      });
+
+      if (result.ok) {
+        // Bindende med en gang, akkurat som createAdminBooking/createBlock over – ingen betaling involvert.
         const created = nextDb.bookingGroups.find((g) => g.id === result.group.id);
         if (created) created.status = "confirmed";
         result.group.status = "confirmed";

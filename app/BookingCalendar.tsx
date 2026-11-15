@@ -155,6 +155,21 @@ export default function BookingCalendar({
   const [recurring, setRecurring] = useState(false);
   const [weeks, setWeeks] = useState(4);
 
+  // Turneringskode (se lib/settings/tournament.ts) – lar en spiller booke en
+  // enkelttime UTEN å betale, mot at de skriver inn motstander i stedet for
+  // telefonnummer (se contact-formen under). Kun gyldig for enkelttimer
+  // (ikke gjentakende), håndhevet BÅDE her (se useEffect under, som skrur av
+  // "gjentakende" automatisk) og på nytt server-side (se
+  // app/api/squash/bookings/route.ts) – stol aldri på klientens egen sjekk
+  // alene.
+  const [showTournamentCode, setShowTournamentCode] = useState(false);
+  const [tournamentCode, setTournamentCode] = useState("");
+  const [tournamentCodeValid, setTournamentCodeValid] = useState(false);
+  const [checkingTournamentCode, setCheckingTournamentCode] = useState(false);
+  const [opponentName, setOpponentName] = useState("");
+  const opponentInputRef = useRef<HTMLInputElement | null>(null);
+  const isTournamentBooking = showTournamentCode && tournamentCodeValid;
+
   // Om gjentakende booking i det hele tatt er mulig fra den valgte
   // startdatoen (kun relevant i det sjeldne tilfellet at datoen ble valgt
   // FØR "Gjenta"-boksen ble huket av, og allerede ligger forbi klubbens
@@ -260,6 +275,42 @@ export default function BookingCalendar({
       controller.abort();
     };
   }, [phone]);
+
+  // Sjekker turneringskoden mot serveren mens kunden skriver (debounce på
+  // 400ms, samme mønster som telefonoppslaget over) – se
+  // app/api/squash/tournament-code/route.ts. Tom kode regnes alltid som
+  // ugyldig, uten noe nettverkskall.
+  useEffect(() => {
+    const trimmed = tournamentCode.trim();
+    if (!trimmed) {
+      setTournamentCodeValid(false);
+      setCheckingTournamentCode(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setCheckingTournamentCode(true);
+    const timeout = setTimeout(() => {
+      fetch(`/api/squash/tournament-code?code=${encodeURIComponent(trimmed)}`, { signal: controller.signal })
+        .then((res) => res.json() as Promise<{ valid: boolean }>)
+        .then((data) => setTournamentCodeValid(!!data.valid))
+        .catch(() => {
+          // Stillegående – kunden får bare ingen "gyldig kode"-bekreftelse ennå.
+        })
+        .finally(() => setCheckingTournamentCode(false));
+    }, 400);
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [tournamentCode]);
+
+  // En turneringskode gjelder KUN enkelttimer – skru av "gjentakende"
+  // automatisk hvis en gyldig kode tas i bruk mens den står huket av.
+  useEffect(() => {
+    if (isTournamentBooking && recurring) setRecurring(false);
+  }, [isTournamentBooking, recurring]);
 
   // Oppdateres jevnlig slik at tidspunkter som akkurat passerte "nå" forsvinner
   // fra rutenettet uten at brukeren må laste siden på nytt.
@@ -384,17 +435,24 @@ export default function BookingCalendar({
     if (!membershipConfirmed) return;
     if (recurring && preview && !preview.allAvailable) return;
 
-    // Navn/telefon er IKKE en del av det Vipps-knappen krever for å være
-    // klikkbar (se canStartPayment under) – i stedet fører et trykk på
-    // knappen hit rett til feltet som mangler, i stedet for å gjøre ingenting.
-    // Dette er nødvendig nå som knappen ligger i en fast boks og ikke lenger
-    // rett ved siden av navn/telefon-feltene i skjemaet over.
+    // Navn/telefon (eller navn/motstander for en turneringsbooking) er IKKE
+    // en del av det Vipps-knappen krever for å være klikkbar (se
+    // canStartPayment under) – i stedet fører et trykk på knappen hit rett
+    // til feltet som mangler, i stedet for å gjøre ingenting. Dette er
+    // nødvendig nå som knappen ligger i en fast boks og ikke lenger rett ved
+    // siden av feltene i skjemaet over.
     if (name.trim().length < 2) {
       nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       nameInputRef.current?.focus({ preventScroll: true });
       return;
     }
-    if (phone.trim().length === 0) {
+    if (isTournamentBooking) {
+      if (opponentName.trim().length < 2) {
+        opponentInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        opponentInputRef.current?.focus({ preventScroll: true });
+        return;
+      }
+    } else if (phone.trim().length === 0) {
       phoneInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       phoneInputRef.current?.focus({ preventScroll: true });
       return;
@@ -414,12 +472,19 @@ export default function BookingCalendar({
           duration,
           weeks: recurring ? weeks : undefined,
           name,
-          phone,
+          phone: isTournamentBooking ? undefined : phone,
+          tournamentCode: isTournamentBooking ? tournamentCode.trim() : undefined,
+          opponentName: isTournamentBooking ? opponentName.trim() : undefined,
         }),
       });
-      const data = (await res.json()) as { redirectUrl?: string; error?: string };
+      const data = (await res.json()) as {
+        redirectUrl?: string;
+        confirmed?: boolean;
+        reference?: string;
+        error?: string;
+      };
 
-      if (!res.ok || !data.redirectUrl) {
+      if (!res.ok || (!data.redirectUrl && !(data.confirmed && data.reference))) {
         setErrorMessage(data.error ?? "Noe gikk galt. Prøv igjen.");
         if (res.status === 409) {
           setSelectedLabel(null);
@@ -430,9 +495,18 @@ export default function BookingCalendar({
         return;
       }
 
-      window.location.href = data.redirectUrl;
+      if (data.confirmed && data.reference) {
+        window.location.href = `/confirmation?ref=${data.reference}`;
+        return;
+      }
+
+      window.location.href = data.redirectUrl!;
     } catch {
-      setErrorMessage("Kunne ikke starte betaling. Sjekk internettforbindelsen og prøv igjen.");
+      setErrorMessage(
+        isTournamentBooking
+          ? "Kunne ikke booke tiden. Sjekk internettforbindelsen og prøv igjen."
+          : "Kunne ikke starte betaling. Sjekk internettforbindelsen og prøv igjen."
+      );
       setSubmitting(false);
     }
   }
@@ -649,6 +723,45 @@ export default function BookingCalendar({
               </div>
             )}
 
+            {selectedLabel && duration !== null && !recurring && (
+              <div className={styles.durationPicker}>
+                <label className={styles.checkboxOption}>
+                  <input
+                    type="checkbox"
+                    checked={showTournamentCode}
+                    onChange={(e) => {
+                      setShowTournamentCode(e.target.checked);
+                      if (!e.target.checked) {
+                        setTournamentCode("");
+                        setOpponentName("");
+                      }
+                    }}
+                  />
+                  Jeg har en turneringskode
+                </label>
+
+                {showTournamentCode && (
+                  <div className={styles.formRow} style={{ marginTop: 10 }}>
+                    <label htmlFor="tournament-code">Turneringskode</label>
+                    <input
+                      id="tournament-code"
+                      type="text"
+                      value={tournamentCode}
+                      onChange={(e) => setTournamentCode(e.target.value)}
+                      placeholder="F.eks. HOST2026"
+                    />
+                    {tournamentCode.trim().length > 0 && !checkingTournamentCode && (
+                      <p className={tournamentCodeValid ? styles.previewRowOk : styles.previewRowConflict}>
+                        {tournamentCodeValid
+                          ? "Gyldig kode – ingen betaling, skriv inn motstander under i stedet for mobilnummer."
+                          : "Ugyldig eller utløpt kode."}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <p className={styles.subtitleText}>
               Trykk på et ledig klokkeslett og velg om du vil booke 30 minutter eller 1 time. Grønt er ledig, rødt er
               fysisk opptatt (sammenhengende opptatte halvtimer flyter sammen til én blokk).
@@ -692,23 +805,42 @@ export default function BookingCalendar({
             />
           </div>
 
-          <div className={styles.formRow}>
-            <label htmlFor="booking-phone">Mobilnummer (Vipps)</label>
-            <input
-              ref={phoneInputRef}
-              id="booking-phone"
-              type="tel"
-              required
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              onFocus={handleContactFieldFocus}
-              onBlur={handleContactFieldBlur}
-              autoComplete="tel"
-            />
-            <p className={styles.subtitleText}>
-              Har du booket før, gjenkjenner vi nummeret og fyller ut navnet for deg.
-            </p>
-          </div>
+          {!isTournamentBooking ? (
+            <div className={styles.formRow}>
+              <label htmlFor="booking-phone">Mobilnummer (Vipps)</label>
+              <input
+                ref={phoneInputRef}
+                id="booking-phone"
+                type="tel"
+                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                onFocus={handleContactFieldFocus}
+                onBlur={handleContactFieldBlur}
+                autoComplete="tel"
+              />
+              <p className={styles.subtitleText}>
+                Har du booket før, gjenkjenner vi nummeret og fyller ut navnet for deg.
+              </p>
+            </div>
+          ) : (
+            <div className={styles.formRow}>
+              <label htmlFor="booking-opponent">Motstander</label>
+              <input
+                ref={opponentInputRef}
+                id="booking-opponent"
+                type="text"
+                required
+                minLength={2}
+                maxLength={100}
+                value={opponentName}
+                onChange={(e) => setOpponentName(e.target.value)}
+                onFocus={handleContactFieldFocus}
+                onBlur={handleContactFieldBlur}
+              />
+              <p className={styles.subtitleText}>Turneringsbooking – ingen betaling nødvendig.</p>
+            </div>
+          )}
 
           {errorMessage && <p className={styles.error}>{errorMessage}</p>}
         </form>
@@ -732,7 +864,9 @@ export default function BookingCalendar({
             className={`${styles.floatingBar} ${contactFieldFocused ? styles.floatingBarHidden : ""}`}
           >
             <div className={styles.floatingBarSummary}>
-              <span className={styles.floatingBarPrice}>{formatPriceOre(totalPrice)}</span>
+              <span className={styles.floatingBarPrice}>
+                {isTournamentBooking ? "Gratis" : formatPriceOre(totalPrice)}
+              </span>
               <span className={styles.floatingBarMeta}>
                 {formatOslo(date, "EEE d. MMM")}, kl. {selectedLabel}
                 {bookingEndLabel ? `–${bookingEndLabel}` : ""}
@@ -755,7 +889,13 @@ export default function BookingCalendar({
               disabled={submitting || !canStartPayment}
             >
               {submitting ? (
-                "Starter Vipps …"
+                isTournamentBooking ? (
+                  "Booker …"
+                ) : (
+                  "Starter Vipps …"
+                )
+              ) : isTournamentBooking ? (
+                "Bekreft booking (turnering)"
               ) : (
                 <>
                   Betal {formatPriceOre(totalPrice)} med

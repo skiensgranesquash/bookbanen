@@ -27,6 +27,8 @@ export interface BookingRow {
   customerPhone: string;
   totalAmountOre: number;
   note: string | null;
+  /** Satt kun for en turneringsbooking (se lib/settings/tournament.ts) – hvem kunden møter. */
+  opponentName: string | null;
   createdAt: string;
   slots: SlotInfo[];
 }

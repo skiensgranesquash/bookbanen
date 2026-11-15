@@ -40,6 +40,7 @@ export type Database = {
           payment_reference: string;
           hold_expires_at: string | null;
           note: string | null;
+          opponent_name: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -54,6 +55,7 @@ export type Database = {
           payment_reference: string;
           hold_expires_at?: string | null;
           note?: string | null;
+          opponent_name?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -68,6 +70,7 @@ export type Database = {
           payment_reference?: string;
           hold_expires_at?: string | null;
           note?: string | null;
+          opponent_name?: string | null;
           created_at?: string;
           updated_at?: string;
         };

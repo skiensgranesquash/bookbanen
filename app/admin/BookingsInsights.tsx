@@ -80,6 +80,8 @@ interface Occurrence {
   kind: BookingRow["kind"];
   customerName: string;
   customerPhone: string;
+  /** Satt kun for en turneringsbooking (se lib/settings/tournament.ts) – hvem kunden møter. Styrer den blå fargen i entryClassFor under. */
+  opponentName: string | null;
   /** Faktisk varighet (minutter) på denne forekomsten – utledet fra slotten sitt eget start/slutt-tidspunkt, ikke en fast konstant, siden en booking nå kan være 30 min eller 1 time. */
   durationMinutes: number;
 }
@@ -97,7 +99,14 @@ function flattenOccurrences(bookings: BookingRow[], includeStatuses: BookingRow[
         (new Date(slot.endTime).getTime() - new Date(slot.startTime).getTime()) / 60_000
       );
       const failed = booking.status === "cancelled" || booking.status === "expired";
-      const shortText = booking.kind === "block" ? booking.note ?? "Blokkert" : booking.customerName;
+      // En turneringsbooking (se lib/settings/tournament.ts) er ALDRI en
+      // blokkering – kun en vanlig enkeltbooking som bare mangler betaling.
+      const isTournamentMatch = booking.kind !== "block" && !!booking.opponentName;
+      const shortText = booking.kind === "block"
+        ? booking.note ?? "Blokkert"
+        : isTournamentMatch
+          ? `${booking.customerName} vs ${booking.opponentName}`
+          : booking.customerName;
       // En "hele dagen"-blokkering (se app/api/admin/block/route.ts) lagres
       // fra 00:00 til 00:00 NESTE dag, altså 1440 minutter – da gir verken
       // "kl. 00:00" eller et fra–til-klokkeslett noen mening, så den får sin
@@ -110,14 +119,16 @@ function flattenOccurrences(bookings: BookingRow[], includeStatuses: BookingRow[
           ? isWholeDayBlock
             ? `🔧 ${shortText} (hele dagen)`
             : `🔧 ${shortText} kl. ${timeLabel}–${endTimeLabel}`
-          : `${booking.customerName} kl. ${timeLabel}`;
+          : `${shortText} kl. ${timeLabel}`;
       const statusClass = failed
         ? styles.bcEventLineFailed
         : booking.kind === "block"
           ? styles.bcEventLineBlock
-          : booking.status === "pending"
-            ? styles.bcEventLinePending
-            : "";
+          : isTournamentMatch
+            ? styles.bcEventLineTournament
+            : booking.status === "pending"
+              ? styles.bcEventLinePending
+              : "";
 
       result.push({
         id: booking.id,
@@ -132,6 +143,7 @@ function flattenOccurrences(bookings: BookingRow[], includeStatuses: BookingRow[
         kind: booking.kind,
         customerName: booking.customerName,
         customerPhone: booking.customerPhone,
+        opponentName: booking.opponentName ?? null,
         durationMinutes,
       });
     }
@@ -143,6 +155,7 @@ function flattenOccurrences(bookings: BookingRow[], includeStatuses: BookingRow[
 function entryClassFor(occ: Occurrence): string {
   if (occ.failed) return styles.bcEntryFailed;
   if (occ.kind === "block") return styles.bcEntryBlock;
+  if (occ.opponentName) return styles.bcEntryTournament;
   if (occ.status === "pending") return styles.bcEntryPending;
   return styles.bcEntryConfirmed;
 }
@@ -821,6 +834,10 @@ export default function BookingsInsights({ bookings, onChanged, onCancel, hoursC
             <span>
               <span className={styles.calLegendDot} style={{ background: "var(--ok-dark)" }} />
               Bekreftet
+            </span>
+            <span>
+              <span className={styles.calLegendDot} style={{ background: "var(--tournament-dark)" }} />
+              Turneringskamp
             </span>
             <span>
               <span className={styles.calLegendDot} style={{ background: "#854d0e" }} />

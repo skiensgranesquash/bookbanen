@@ -45,6 +45,8 @@ export interface BookingGroup {
   holdExpiresAt: string | null;
   /** Kun satt for kind "block" – admin sin notat om hvorfor tiden er stengt. */
   note: string | null;
+  /** Kun satt for en turneringsbooking (se lib/settings/tournament.ts) – hvem kunden møter. Null for alle andre bookinger. */
+  opponentName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -73,6 +75,8 @@ export interface NewBookingGroupInput {
   totalAmountOre: number;
   holdExpiresAt: string | null;
   note?: string | null;
+  /** Kun for en turneringsbooking (se createTournamentBooking under) – hvem kunden møter. */
+  opponentName?: string | null;
   /** Slots opprettes sammen med gruppen, atomisk (alt-eller-ingenting). */
   slots: Array<{ courtId: string; startTime: string; endTime: string }>;
 }
@@ -174,6 +178,20 @@ export interface BookingRepository {
     customerPhone: string;
     totalAmountOre: number;
     ranges: TimeRange[];
+  }): Promise<CreateResult>;
+
+  /**
+   * Oppretter en turneringsbooking – en enkelttime en spiller booker med en
+   * admin-utstedt turneringskode i stedet for betaling (se
+   * lib/settings/tournament.ts). Bindende med en gang (status "confirmed"),
+   * ingen betaling involvert – samme "bindende med en gang"-mønster som
+   * createBlock/createAdminBooking over. `source` er likevel "customer"
+   * (det er jo spilleren selv som booket, bare uten å betale), IKKE "admin".
+   */
+  createTournamentBooking(input: {
+    customerName: string;
+    opponentName: string;
+    range: TimeRange;
   }): Promise<CreateResult>;
 
   /**

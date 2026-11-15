@@ -26,6 +26,7 @@ import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHo
 import { getPricingSettings, priceForDuration } from "@/lib/settings/pricing";
 import { getRecurringCutoffDate, getRecurringMaxWeeks } from "@/lib/settings/recurringLimit";
 import { getEffectiveSingleBookingMaxDate } from "@/lib/settings/singleBookingLimit";
+import { isTournamentCodeValid } from "@/lib/settings/tournament";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,15 @@ interface CreateBookingBody {
   weeks?: number;
   name?: string;
   phone?: string;
+  /**
+   * Turneringskode (se lib/settings/tournament.ts) – satt betyr at kunden
+   * booker en turneringskamp i stedet for en vanlig booking: ingen betaling,
+   * `opponentName` kreves i stedet for `phone`, og kun enkelttimer er lov
+   * (se håndhevingen under).
+   */
+  tournamentCode?: string;
+  /** Kun relevant sammen med tournamentCode – hvem kunden møter. */
+  opponentName?: string;
 }
 
 /**
@@ -72,6 +82,16 @@ export async function POST(request: NextRequest) {
   const weeks = Number(body.weeks ?? 1);
   const name = body.name?.trim() ?? "";
   const phone = normalizeNorwegianMobile(body.phone ?? "");
+  const tournamentCode = body.tournamentCode?.trim() ?? "";
+  const opponentNameInput = body.opponentName?.trim() ?? "";
+  const isTournamentBooking = tournamentCode.length > 0;
+
+  if (isTournamentBooking && mode !== "single") {
+    return NextResponse.json(
+      { error: "Turneringskode kan bare brukes på enkelttimer, ikke gjentakende bookinger." },
+      { status: 400 }
+    );
+  }
 
   if (!isBookableDurationMinutes(body.duration)) {
     return NextResponse.json({ error: "Ugyldig varighet – må være 30 eller 60 minutter." }, { status: 400 });
@@ -100,7 +120,16 @@ export async function POST(request: NextRequest) {
   if (name.length < 2 || name.length > 100) {
     return NextResponse.json({ error: "Navn må være mellom 2 og 100 tegn." }, { status: 400 });
   }
-  if (!phone) {
+
+  if (isTournamentBooking) {
+    if (opponentNameInput.length < 2 || opponentNameInput.length > 100) {
+      return NextResponse.json({ error: "Motstanders navn må være mellom 2 og 100 tegn." }, { status: 400 });
+    }
+    const validCode = await isTournamentCodeValid(tournamentCode);
+    if (!validCode) {
+      return NextResponse.json({ error: "Ugyldig eller utløpt turneringskode." }, { status: 400 });
+    }
+  } else if (!phone) {
     return NextResponse.json(
       { error: "Ugyldig mobilnummer. Bruk et norsk mobilnummer, f.eks. 91234567." },
       { status: 400 }
@@ -166,6 +195,45 @@ export async function POST(request: NextRequest) {
     await expireStaleHolds();
   } catch (err) {
     console.error("[bookings] kunne ikke rydde opp utløpte holds før booking:", err);
+  }
+
+  // Turneringsbooking: bindende med en gang, ingen betaling – se
+  // createTournamentBooking i lib/db/types.ts. `isTournamentBooking` har
+  // allerede tvunget mode til "single" over, så validOccurrences har
+  // nøyaktig ett tidsrom her.
+  if (isTournamentBooking) {
+    const repo = await getRepository();
+    const createResult = await repo.createTournamentBooking({
+      customerName: name,
+      opponentName: opponentNameInput,
+      range: {
+        startTime: validOccurrences[0].startTime.toISOString(),
+        endTime: validOccurrences[0].endTime.toISOString(),
+      },
+    });
+
+    if (!createResult.ok) {
+      return NextResponse.json(
+        {
+          error: "Beklager, den tiden ble akkurat tatt av noen andre. Velg en annen tid.",
+          conflicts: createResult.conflicts,
+        },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json({ reference: createResult.group.id, confirmed: true });
+  }
+
+  // TypeScript ser ikke at phone alltid er en ikke-null streng herfra og ut
+  // (den er bare null for en turneringsbooking, som allerede har returnert
+  // over) – denne sjekken er i praksis alltid usann her, men gir resten av
+  // funksjonen en konkret string-type for phone i stedet for string | null.
+  if (!phone) {
+    return NextResponse.json(
+      { error: "Ugyldig mobilnummer. Bruk et norsk mobilnummer, f.eks. 91234567." },
+      { status: 400 }
+    );
   }
 
   const bookingId = randomUUID();

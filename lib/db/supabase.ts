@@ -46,6 +46,8 @@ interface GroupRow {
   payment_reference: string;
   hold_expires_at: string | null;
   note: string | null;
+  /** Mangler på rader satt inn før denne kolonnen fantes – se migrations/0006_add_tournament_fields.sql. */
+  opponent_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +72,7 @@ function mapGroup(row: GroupRow): BookingGroup {
     paymentReference: row.payment_reference,
     holdExpiresAt: row.hold_expires_at,
     note: row.note,
+    opponentName: row.opponent_name ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -175,6 +178,7 @@ async function insertGroupWithSlots(
     payment_reference: input.id,
     hold_expires_at: input.holdExpiresAt,
     note: input.note ?? null,
+    opponent_name: input.opponentName ?? null,
   });
 
   if (groupError) {
@@ -347,6 +351,25 @@ export const supabaseRepository: BookingRepository = {
         holdExpiresAt: null,
         note: null,
         slots: ranges.map((range) => ({ courtId: COURT_ID, startTime: range.startTime, endTime: range.endTime })),
+      },
+      "confirmed"
+    );
+  },
+
+  async createTournamentBooking({ customerName, opponentName, range }) {
+    const { randomUUID } = await import("node:crypto");
+    return insertGroupWithSlots(
+      {
+        id: randomUUID(),
+        kind: "single",
+        source: "customer",
+        customerName,
+        customerPhone: "",
+        totalAmountOre: 0,
+        holdExpiresAt: null,
+        note: null,
+        opponentName,
+        slots: [{ courtId: COURT_ID, startTime: range.startTime, endTime: range.endTime }],
       },
       "confirmed"
     );

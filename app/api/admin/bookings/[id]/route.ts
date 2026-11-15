@@ -164,7 +164,10 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     return NextResponse.json({ error: "Fant ingen booking med denne referansen." }, { status: 404 });
   }
 
-  if (previous.status === "confirmed" && previous.kind !== "block") {
+  // En turneringsbooking (se lib/settings/tournament.ts) har totalAmountOre
+  // 0 – den ble aldri betalt, så et refusjonskall her ville bare risikere en
+  // falsk "refusjonen feilet, husk å refundere manuelt"-advarsel.
+  if (previous.status === "confirmed" && previous.kind !== "block" && previous.totalAmountOre > 0) {
     try {
       const provider = await getPaymentProviderImpl();
       await provider.refund(previous.paymentReference, previous.totalAmountOre);
