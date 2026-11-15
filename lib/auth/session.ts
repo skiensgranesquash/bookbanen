@@ -29,7 +29,7 @@ export interface SessionPayload {
 }
 
 export const SESSION_COOKIE_NAME = "admin_session";
-export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 dager
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 dager ("husk meg" - var 7 dager tidligere)
 
 function getSecretKey(): Promise<CryptoKey> {
   const secret = process.env.SESSION_SECRET;

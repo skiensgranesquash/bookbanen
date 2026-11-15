@@ -80,6 +80,42 @@
   --available: #f3f4f6;
 }
 
+.passwordResetBanner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  min-height: 40px;
+  padding: 8px 16px;
+  background: var(--brand-yellow);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.passwordResetBanner button {
+  padding: 4px 10px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+/* Skyver den faste sidemenyen/toppbaren ned mens varselet vises, slik at det
+   ikke dekker over "Adminpanel"-merket/profilmenyen - se AdminNav.tsx. */
+body:has(.passwordResetBanner) .sidebar,
+body:has(.passwordResetBanner) .topBar {
+  top: 40px;
+}
+
 .sidebar {
   position: fixed;
   top: 0;

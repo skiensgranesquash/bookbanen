@@ -43,6 +43,10 @@ const BOOKINGS_ONLY_ALLOWED_API_EXACT = new Set([
   "/api/admin/logout",
   "/api/admin/block",
   "/api/admin/account/password",
+  // En begrenset administrator bør også få vite at en kollega har glemt
+  // passordet sitt - se app/admin/AdminNav.tsx og
+  // lib/settings/passwordResetNotice.ts.
+  "/api/admin/password-reset-notice",
 ]);
 const BOOKINGS_ONLY_ALLOWED_API_PREFIXES = ["/api/admin/bookings"];
 
@@ -58,7 +62,13 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isApi = pathname.startsWith("/api/");
-  const isAdminApi = pathname.startsWith("/api/admin") && pathname !== "/api/admin/login";
+  // "/api/admin/forgot-password" er offentlig på nøyaktig samme måte som
+  // "/api/admin/login" - den kalles jo fra innloggingssiden, FØR man er
+  // logget inn (se LoginForm.tsx).
+  const isAdminApi =
+    pathname.startsWith("/api/admin") &&
+    pathname !== "/api/admin/login" &&
+    pathname !== "/api/admin/forgot-password";
   const isAdminPage = pathname.startsWith("/admin") && pathname !== "/admin/login";
 
   // Legger alltid pa "ikke mellomlagre dette" for ALLE /api/-svar, uansett

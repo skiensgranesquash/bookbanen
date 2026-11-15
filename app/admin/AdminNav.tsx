@@ -33,6 +33,13 @@ interface Me {
   role?: string;
 }
 
+/** Se lib/settings/passwordResetNotice.ts. */
+interface PasswordResetNotice {
+  name: string;
+  email: string;
+  requestedAt: string;
+}
+
 /**
  * Fast venstremeny + toppbar, delt av alle innloggede admin-sider
  * (app/admin/**). Sidemenyen til venstre viser de bookbare SIDENE
@@ -55,6 +62,13 @@ interface Me {
 export default function AdminNav({ active }: { active: AdminNavKey }) {
   const [me, setMe] = useState<Me | null>(null);
 
+  // "Noen har glemt passordet sitt"-varselet (se app/admin/login/LoginForm.tsx
+  // + app/api/admin/forgot-password/route.ts) - hentes her siden AdminNav
+  // rendres øverst på absolutt alle innloggede admin-sider, uavhengig av
+  // hvilken fane man står på.
+  const [notice, setNotice] = useState<PasswordResetNotice | null>(null);
+  const [dismissingNotice, setDismissingNotice] = useState(false);
+
   useEffect(() => {
     fetch("/api/admin/me", { cache: "no-store" })
       .then((res) => (res.ok ? (res.json() as Promise<Me>) : null))
@@ -66,13 +80,43 @@ export default function AdminNav({ active }: { active: AdminNavKey }) {
         // en begrenset admin; middleware.ts stenger fortsatt det hun/han
         // ikke har tilgang til om et slikt menypunkt faktisk klikkes på.
       });
+
+    fetch("/api/admin/password-reset-notice", { cache: "no-store" })
+      .then((res) => (res.ok ? (res.json() as Promise<{ notice: PasswordResetNotice | null }>) : null))
+      .then((data) => setNotice(data?.notice ?? null))
+      .catch(() => {
+        // Ikke kritisk – varselet er bare en hyggelig ekstra-ting, ikke noe
+        // sikkerhetskritisk å garantere leveranse av.
+      });
   }, []);
+
+  async function handleDismissNotice() {
+    setDismissingNotice(true);
+    try {
+      await fetch("/api/admin/password-reset-notice", { method: "DELETE" });
+      setNotice(null);
+    } finally {
+      setDismissingNotice(false);
+    }
+  }
 
   const bookingsOnly = me?.role === "bookings_only";
   const visibleTabs = bookingsOnly ? TABS.filter((tab) => BOOKINGS_ONLY_VISIBLE_TABS.has(tab.key)) : TABS;
 
   return (
     <>
+      {notice && (
+        <div className={styles.passwordResetBanner}>
+          <span>
+            <strong>{notice.name}</strong> ({notice.email}) har glemt passordet sitt – sett et nytt for dem under
+            Administratorer.
+          </span>
+          <button type="button" onClick={handleDismissNotice} disabled={dismissingNotice}>
+            {dismissingNotice ? "Fjerner …" : "Lukk"}
+          </button>
+        </div>
+      )}
+
       <div className={styles.sidebar}>
         <div className={styles.sidebarBrand}>Adminpanel</div>
         <nav className={styles.sidebarNav}>
