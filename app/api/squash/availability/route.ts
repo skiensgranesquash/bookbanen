@@ -61,43 +61,42 @@ export async function GET(request: NextRequest) {
   const adminSession = await verifySessionCookieValue(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   const isFullAdmin = adminSession?.role === "full";
 
-  if (!isFullAdmin) {
-    if (dateStr < todayInClubTimeZone()) {
-      return NextResponse.json({ date: dateStr, slots: [], closed: true, note: null });
-    }
+  if (!isFullAdmin && dateStr < todayInClubTimeZone()) {
+    return NextResponse.json({ date: dateStr, slots: [], closed: true, note: null });
+  }
 
+  // Starter ALLE uavhengige oppslag SAMTIDIG i stedet for i bølger etter
+  // hverandre (tidligere: maxDate ble ventet HELT ferdig FØR holds-
+  // oppryddingen og åpningstid-oppslaget i det hele tatt startet – tre
+  // separate "bølger" med nettverks-ventetid på HVER ENESTE "hent ledige
+  // tider"-forespørsel, i stedet for to). Alle tre er helt uavhengige av
+  // hverandre; maxDate ventes inn FØRST under (siden den kan gjøre at vi
+  // returnerer tidlig), men de to andre har da allerede vært i gang en
+  // stund i bakgrunnen uansett – bortkastet for den sjeldne "for langt frem
+  // i tid"-dagen, men en reell gevinst for alle andre (de aller fleste)
+  // forespørslene.
+  const maxDatePromise = isFullAdmin ? Promise.resolve(null) : getEffectiveSingleBookingMaxDate();
+  const holdsCleanupPromise = expireStaleHolds().catch((err) => {
+    console.error("[availability] kunne ikke rydde opp utløpte holds:", err);
+  });
+  const hoursPromise = getEffectiveHoursForDate(dateStr);
+
+  if (!isFullAdmin) {
     // VIKTIG: dette er IKKE det samme som at banen er "stengt" denne dagen
     // – den er fysisk åpen akkurat som vanlig, det er bare ikke lov å booke
     // en ENKELTTIME så langt frem i tid (ennå). Får derfor sitt EGET flagg
     // (`tooFarAhead`) i stedet for å late som dagen er stengt, slik at
     // bookingsiden kan vise en korrekt melding (se BookingCalendar.tsx).
-    const maxDate = await getEffectiveSingleBookingMaxDate();
+    const maxDate = await maxDatePromise;
     if (maxDate !== null && dateStr > maxDate) {
       return NextResponse.json({ date: dateStr, slots: [], closed: false, tooFarAhead: true, note: null });
     }
   }
 
-  // Starter oppryddingen av utløpte holds SAMTIDIG med åpningstid-oppslaget
-  // under (ikke rett etter) – de to spørringene er helt uavhengige av
-  // hverandre, så å vente ferdig på den ene før den andre i det hele tatt
-  // startet var bare unødvendig ekstra nettverks-ventetid på HVER ENKELT
-  // "hent ledige tider"-forespørsel. Selve databasetriggeren som holder
-  // blocks_time (brukt av findConflicts under) oppdatert kjører likevel i
-  // SAMME transaksjon som denne UPDATE-en, så korrektheten er uendret – vi
-  // sørger bare for at den er ferdig (se `await holdsCleanupPromise` under)
-  // før vi faktisk spør om ledighet. Feil her er ikke kritisk og skal
-  // aldri blokkere eller feile selve svaret, se .catch() under.
-  const holdsCleanupPromise = expireStaleHolds().catch((err) => {
-    console.error("[availability] kunne ikke rydde opp utløpte holds:", err);
-  });
-
-  const hours = await getEffectiveHoursForDate(dateStr);
+  const [hours] = await Promise.all([hoursPromise, holdsCleanupPromise]);
   if (hours.closed) {
-    await holdsCleanupPromise;
     return NextResponse.json({ date: dateStr, slots: [], closed: true, note: hours.note });
   }
-
-  await holdsCleanupPromise;
 
   const slots = generateSlotsForDate(dateStr, hours.intervals);
   if (slots.length === 0) {

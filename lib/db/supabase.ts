@@ -1,5 +1,7 @@
 import "server-only";
-import { COURT_ID } from "@/lib/config";
+import { addDays } from "date-fns";
+import { fromZonedTime } from "date-fns-tz";
+import { COURT_ID, TIME_ZONE } from "@/lib/config";
 import { getSupabaseAdmin } from "./supabaseClient";
 import type {
   AdminRole,
@@ -245,12 +247,44 @@ export const supabaseRepository: BookingRepository = {
     if (error) throw new Error(`Klarte ikke å rydde opp utløpte holds: ${error.message}`);
   },
 
-  async listGroups(_filter: ListGroupsFilter) {
+  async listGroups(filter: ListGroupsFilter) {
     const supabase = getSupabaseAdmin();
 
+    // Begrenser hvor mye som faktisk hentes til et vindu rundt dagens dato
+    // (se app/api/admin/bookings/route.ts, som alltid sender fromDate/
+    // toDate) i stedet for ALT noensinne booket. Parameteret het tidligere
+    // "_filter" MED VILJE (for å markere at det ikke ble brukt) og ble
+    // fullstendig ignorert – adminpanelet hentet derfor hele
+    // bookingshistorikken på HVERT eneste kall, og ble tregere og tregere jo
+    // lenger klubben hadde brukt systemet. fromDate/toDate tolkes som lokale
+    // (klubbens tidssone) kalenderdatoer, akkurat som "hele dagen"-
+    // blokkeringer i app/api/admin/block/route.ts.
+    let relevantGroupIds: string[] | null = null;
+    if (filter.fromDate || filter.toDate) {
+      let idsQuery = supabase.from("booking_slots").select("group_id");
+      if (filter.fromDate) {
+        idsQuery = idsQuery.gte("start_time", fromZonedTime(`${filter.fromDate}T00:00:00`, TIME_ZONE).toISOString());
+      }
+      if (filter.toDate) {
+        const exclusiveEnd = addDays(fromZonedTime(`${filter.toDate}T00:00:00`, TIME_ZONE), 1);
+        idsQuery = idsQuery.lt("start_time", exclusiveEnd.toISOString());
+      }
+      const { data: idRows, error: idError } = await idsQuery;
+      if (idError) throw new Error(`Kunne ikke hente bookinger: ${idError.message}`);
+      relevantGroupIds = Array.from(new Set((idRows ?? []).map((r) => r.group_id as string)));
+      if (relevantGroupIds.length === 0) return [];
+    }
+
+    let groupsQuery = supabase.from("booking_groups").select("*");
+    let slotsQuery = supabase.from("booking_slots").select("*");
+    if (relevantGroupIds) {
+      groupsQuery = groupsQuery.in("id", relevantGroupIds);
+      slotsQuery = slotsQuery.in("group_id", relevantGroupIds);
+    }
+
     const [{ data: groupRows, error: groupError }, { data: slotRows, error: slotError }] = await Promise.all([
-      supabase.from("booking_groups").select("*"),
-      supabase.from("booking_slots").select("*"),
+      groupsQuery,
+      slotsQuery,
     ]);
 
     if (groupError) throw new Error(`Kunne ikke hente bookinger: ${groupError.message}`);

@@ -1122,6 +1122,13 @@
 @media (max-width: 820px) {
   .bcWrap {
     min-width: 0;
+    /* "Dagens avtaler" (.agendaPanel) skal ligge ØVERST på mobil, "Oversikt"
+       (kalenderen) under – se .agendaPanel sin order-regel rett under. */
+    order: 2;
+  }
+
+  .agendaPanel {
+    order: 1;
   }
 
   .blockStrip .inlineFields > div {
