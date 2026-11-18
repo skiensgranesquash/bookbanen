@@ -1571,3 +1571,42 @@ body:has(.passwordResetBanner) .topBar {
 .previewRowConflict:last-child {
   border-bottom: none;
 }
+
+/* ---- "Koder": underfane-linje (Turneringer/Klippekort) – se
+   app/admin/koder/KoderTabs.tsx. Horisontal, i motsetning til den faste
+   venstre sidemenyen (.navLink/.navLinkActive over), siden dette er TO
+   sider under SAMME hovedfane, ikke hovedmenyen selv. ---- */
+
+.subTabBar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.subTabLink {
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 2.5px solid transparent;
+  margin-bottom: -1px;
+}
+
+.subTabLink:hover {
+  color: var(--brand);
+}
+
+.subTabLinkActive {
+  color: var(--brand);
+  border-bottom-color: var(--brand-yellow);
+}
+
+/* ---- "Koder" → Turneringer: ekspanderbar kampliste per turnering (se
+   TournamentsManager.tsx) – smalt innrykk, egen bakgrunn for å skille den
+   visuelt fra selve turnerings-raden den hører til. ---- */
+
+.tournamentMatchesPanel {
+  padding: 10px 14px 4px;
+}

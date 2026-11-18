@@ -26,7 +26,7 @@ import { effectiveHoursForDate, getHoursContext } from "@/lib/settings/openingHo
 import { getPricingSettings, priceForDuration } from "@/lib/settings/pricing";
 import { getRecurringCutoffDate, getRecurringMaxWeeks } from "@/lib/settings/recurringLimit";
 import { getEffectiveSingleBookingMaxDate } from "@/lib/settings/singleBookingLimit";
-import { isTournamentCodeValid } from "@/lib/settings/tournament";
+import { findValidTournamentByCode } from "@/lib/settings/tournament";
 
 export const dynamic = "force-dynamic";
 
@@ -121,14 +121,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Navn må være mellom 2 og 100 tegn." }, { status: 400 });
   }
 
+  let matchedTournamentId: string | null = null;
   if (isTournamentBooking) {
     if (opponentNameInput.length < 2 || opponentNameInput.length > 100) {
       return NextResponse.json({ error: "Motstanders navn må være mellom 2 og 100 tegn." }, { status: 400 });
     }
-    const validCode = await isTournamentCodeValid(tournamentCode);
-    if (!validCode) {
+    const matchedTournament = await findValidTournamentByCode(tournamentCode);
+    if (!matchedTournament) {
       return NextResponse.json({ error: "Ugyldig eller utløpt turneringskode." }, { status: 400 });
     }
+    matchedTournamentId = matchedTournament.id;
   } else if (!phone) {
     return NextResponse.json(
       { error: "Ugyldig mobilnummer. Bruk et norsk mobilnummer, f.eks. 91234567." },
@@ -206,6 +208,7 @@ export async function POST(request: NextRequest) {
     const createResult = await repo.createTournamentBooking({
       customerName: name,
       opponentName: opponentNameInput,
+      tournamentId: matchedTournamentId,
       range: {
         startTime: validOccurrences[0].startTime.toISOString(),
         endTime: validOccurrences[0].endTime.toISOString(),

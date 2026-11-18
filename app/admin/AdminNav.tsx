@@ -6,7 +6,7 @@ import styles from "./admin.module.css";
 
 const TABS = [
   { key: "oversikt", label: "Bookinger", href: "/admin" },
-  { key: "turnering", label: "Turnering", href: "/admin/turnering" },
+  { key: "koder", label: "Koder", href: "/admin/koder" },
   { key: "konto", label: "Administratorer", href: "/admin/account" },
   { key: "vipps", label: "Vipps", href: "/admin/settings" },
   { key: "apningstider", label: "Oppsett", href: "/admin/opening-hours" },

@@ -47,6 +47,8 @@ export interface BookingGroup {
   note: string | null;
   /** Kun satt for en turneringsbooking (se lib/settings/tournament.ts) – hvem kunden møter. Null for alle andre bookinger. */
   opponentName: string | null;
+  /** Hvilken turnering (se Tournament over) en turneringsbooking hører til – null for alle andre bookinger, og også null for en turneringsbooking hvis selve turneringen senere slettes (se "on delete set null" i migrasjonen). */
+  tournamentId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -77,6 +79,8 @@ export interface NewBookingGroupInput {
   note?: string | null;
   /** Kun for en turneringsbooking (se createTournamentBooking under) – hvem kunden møter. */
   opponentName?: string | null;
+  /** Kun for en turneringsbooking – hvilken turnering (se Tournament over). */
+  tournamentId?: string | null;
   /** Slots opprettes sammen med gruppen, atomisk (alt-eller-ingenting). */
   slots: Array<{ courtId: string; startTime: string; endTime: string }>;
 }
@@ -116,6 +120,24 @@ export interface AdminUser {
   passwordHash: string;
   passwordSalt: string;
   role: AdminRole;
+  createdAt: string;
+}
+
+/**
+ * Én turnering (se app/admin/koder/turneringer/TournamentsManager.tsx) – admin
+ * kan nå opprette flere, hver med sin egen kode/av-på-bryter/utløpsdato, i
+ * stedet for ETT delt sett med innstillinger (den gamle modellen, se
+ * historikken i lib/settings/tournament.ts). `code` trenger ikke være unik i
+ * selve datalaget – API-ruten (app/api/admin/tournaments/route.ts) sjekker
+ * kollisjon mot andre turneringer FØR den lagres, slik at to turneringer
+ * aldri kan dele samme kode.
+ */
+export interface Tournament {
+  id: string;
+  name: string;
+  code: string;
+  active: boolean;
+  expiresAt: string | null;
   createdAt: string;
 }
 
@@ -191,6 +213,8 @@ export interface BookingRepository {
   createTournamentBooking(input: {
     customerName: string;
     opponentName: string;
+    /** Hvilken turnering koden hørte til (se findValidTournamentByCode i lib/settings/tournament.ts) – lagres på bookingen for at admin skal kunne se/filtrere kamper per turnering. */
+    tournamentId: string | null;
     range: TimeRange;
   }): Promise<CreateResult>;
 
@@ -264,6 +288,21 @@ export interface BookingRepository {
    * brukeren ikke finnes.
    */
   deleteAdminUser(id: string): Promise<void>;
+
+  /**
+   * Turneringer (se Tournament over og
+   * app/admin/koder/turneringer/TournamentsManager.tsx) – admin kan lage,
+   * endre og slette flere turneringer. Kamper booket med en turnering som
+   * senere slettes, beholdes (se "on delete set null" i migrasjonen) – kun
+   * selve turneringsoppføringen (kode/av-på/utløpsdato) forsvinner.
+   */
+  listTournaments(): Promise<Tournament[]>;
+  createTournament(input: { name: string; code: string; active: boolean; expiresAt: string | null }): Promise<Tournament>;
+  updateTournament(
+    id: string,
+    patch: { name?: string; code?: string; active?: boolean; expiresAt?: string | null }
+  ): Promise<Tournament>;
+  deleteTournament(id: string): Promise<void>;
 
   /**
    * Enkel nøkkel/verdi-lagring for innstillinger satt via adminpanelet (f.eks.

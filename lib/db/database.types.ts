@@ -41,6 +41,7 @@ export type Database = {
           hold_expires_at: string | null;
           note: string | null;
           opponent_name: string | null;
+          tournament_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -56,6 +57,7 @@ export type Database = {
           hold_expires_at?: string | null;
           note?: string | null;
           opponent_name?: string | null;
+          tournament_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -71,6 +73,7 @@ export type Database = {
           hold_expires_at?: string | null;
           note?: string | null;
           opponent_name?: string | null;
+          tournament_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -158,6 +161,33 @@ export type Database = {
           key?: string;
           value?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      tournaments: {
+        Row: {
+          id: string;
+          name: string;
+          code: string;
+          active: boolean;
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          code: string;
+          active?: boolean;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          code?: string;
+          active?: boolean;
+          expires_at?: string | null;
+          created_at?: string;
         };
         Relationships: [];
       };

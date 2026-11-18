@@ -13,6 +13,7 @@ import type {
   ListGroupsFilter,
   NewBookingGroupInput,
   TimeRange,
+  Tournament,
 } from "./types";
 
 /**
@@ -34,18 +35,24 @@ interface DbShape {
   bookingGroups: BookingGroup[];
   bookingSlots: BookingSlot[];
   adminUsers: AdminUser[];
+  tournaments: Tournament[];
   settings: Record<string, string>;
 }
 
 const DB_PATH = path.join(process.cwd(), "data", "db.json");
 
 function emptyDb(): DbShape {
-  return { bookingGroups: [], bookingSlots: [], adminUsers: [], settings: {} };
+  return { bookingGroups: [], bookingSlots: [], adminUsers: [], tournaments: [], settings: {} };
 }
 
 /** Eldre lagrede bookinger (fra før `source`/`opponentName`-feltene fantes) mangler dem – `source` regnes da som en vanlig kundebooking, `opponentName` som null (ikke en turneringsbooking). */
 function normalizeGroup(group: BookingGroup): BookingGroup {
-  return { ...group, source: group.source ?? "customer", opponentName: group.opponentName ?? null };
+  return {
+    ...group,
+    source: group.source ?? "customer",
+    opponentName: group.opponentName ?? null,
+    tournamentId: group.tournamentId ?? null,
+  };
 }
 
 /** Eldre lagrede admin-brukere (fra før `role`-feltet fantes) mangler feltet – de regnes som fulle administratorer, akkurat som de alltid har vært. */
@@ -61,6 +68,7 @@ async function loadDb(): Promise<DbShape> {
       bookingGroups: (parsed.bookingGroups ?? []).map(normalizeGroup),
       bookingSlots: parsed.bookingSlots ?? [],
       adminUsers: parsed.adminUsers ?? [],
+      tournaments: parsed.tournaments ?? [],
       settings: parsed.settings ?? {},
     };
   } catch (err) {
@@ -145,6 +153,7 @@ async function createGroupWithSlotsInternal(
     holdExpiresAt: input.holdExpiresAt,
     note: input.note ?? null,
     opponentName: input.opponentName ?? null,
+    tournamentId: input.tournamentId ?? null,
     createdAt: now,
     updatedAt: now,
   };
@@ -319,7 +328,7 @@ export const localRepository: BookingRepository = {
     });
   },
 
-  async createTournamentBooking({ customerName, opponentName, range }) {
+  async createTournamentBooking({ customerName, opponentName, tournamentId, range }) {
     return withLock(async () => {
       const db = await loadDb();
       const { db: nextDb, result } = await createGroupWithSlotsInternal(db, {
@@ -332,6 +341,7 @@ export const localRepository: BookingRepository = {
         holdExpiresAt: null,
         note: null,
         opponentName,
+        tournamentId,
         slots: [{ courtId: "1", startTime: range.startTime, endTime: range.endTime }],
       });
 
@@ -480,6 +490,52 @@ export const localRepository: BookingRepository = {
       const exists = db.adminUsers.some((u) => u.id === id);
       if (!exists) throw new Error("Fant ingen admin-bruker med denne iden.");
       db.adminUsers = db.adminUsers.filter((u) => u.id !== id);
+      await saveDb(db);
+    });
+  },
+
+  async listTournaments() {
+    const db = await loadDb();
+    return [...db.tournaments].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+
+  async createTournament(input) {
+    return withLock(async () => {
+      const db = await loadDb();
+      const tournament: Tournament = {
+        id: randomUUID(),
+        name: input.name,
+        code: input.code,
+        active: input.active,
+        expiresAt: input.expiresAt,
+        createdAt: new Date().toISOString(),
+      };
+      db.tournaments.push(tournament);
+      await saveDb(db);
+      return tournament;
+    });
+  },
+
+  async updateTournament(id, patch) {
+    return withLock(async () => {
+      const db = await loadDb();
+      const tournament = db.tournaments.find((t) => t.id === id);
+      if (!tournament) throw new Error("Fant ingen turnering med denne iden.");
+      if (patch.name !== undefined) tournament.name = patch.name;
+      if (patch.code !== undefined) tournament.code = patch.code;
+      if (patch.active !== undefined) tournament.active = patch.active;
+      if (patch.expiresAt !== undefined) tournament.expiresAt = patch.expiresAt;
+      await saveDb(db);
+      return tournament;
+    });
+  },
+
+  async deleteTournament(id) {
+    return withLock(async () => {
+      const db = await loadDb();
+      const exists = db.tournaments.some((t) => t.id === id);
+      if (!exists) throw new Error("Fant ingen turnering med denne iden.");
+      db.tournaments = db.tournaments.filter((t) => t.id !== id);
       await saveDb(db);
     });
   },

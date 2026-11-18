@@ -17,6 +17,7 @@ import type {
   ListGroupsFilter,
   NewBookingGroupInput,
   TimeRange,
+  Tournament,
 } from "./types";
 
 /**
@@ -48,6 +49,8 @@ interface GroupRow {
   note: string | null;
   /** Mangler på rader satt inn før denne kolonnen fantes – se migrations/0006_add_tournament_fields.sql. */
   opponent_name: string | null;
+  /** Hvilken turnering (se migrations/0007_add_tournaments_table.sql) – null for alle andre bookinger, og null hvis selve turneringen senere slettes ("on delete set null"). */
+  tournament_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -73,6 +76,7 @@ function mapGroup(row: GroupRow): BookingGroup {
     holdExpiresAt: row.hold_expires_at,
     note: row.note,
     opponentName: row.opponent_name ?? null,
+    tournamentId: row.tournament_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -85,6 +89,26 @@ function mapSlot(row: SlotRow): BookingSlot {
     courtId: row.court_id,
     startTime: row.start_time,
     endTime: row.end_time,
+  };
+}
+
+interface TournamentRow {
+  id: string;
+  name: string;
+  code: string;
+  active: boolean;
+  expires_at: string | null;
+  created_at: string;
+}
+
+function mapTournament(row: TournamentRow): Tournament {
+  return {
+    id: row.id,
+    name: row.name,
+    code: row.code,
+    active: row.active,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
   };
 }
 
@@ -179,6 +203,7 @@ async function insertGroupWithSlots(
     hold_expires_at: input.holdExpiresAt,
     note: input.note ?? null,
     opponent_name: input.opponentName ?? null,
+    tournament_id: input.tournamentId ?? null,
   });
 
   if (groupError) {
@@ -356,7 +381,7 @@ export const supabaseRepository: BookingRepository = {
     );
   },
 
-  async createTournamentBooking({ customerName, opponentName, range }) {
+  async createTournamentBooking({ customerName, opponentName, tournamentId, range }) {
     const { randomUUID } = await import("node:crypto");
     return insertGroupWithSlots(
       {
@@ -369,6 +394,7 @@ export const supabaseRepository: BookingRepository = {
         holdExpiresAt: null,
         note: null,
         opponentName,
+        tournamentId,
         slots: [{ courtId: COURT_ID, startTime: range.startTime, endTime: range.endTime }],
       },
       "confirmed"
@@ -611,6 +637,52 @@ export const supabaseRepository: BookingRepository = {
     const supabase = getSupabaseAdmin();
     const { error } = await supabase.from("admin_users").delete().eq("id", id);
     if (error) throw new Error(`Kunne ikke slette admin-bruker: ${error.message}`);
+  },
+
+  async listTournaments() {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from("tournaments")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(`Kunne ikke liste turneringer: ${error.message}`);
+    return ((data as TournamentRow[] | null) ?? []).map(mapTournament);
+  },
+
+  async createTournament(input) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from("tournaments")
+      .insert({ name: input.name, code: input.code, active: input.active, expires_at: input.expiresAt })
+      .select()
+      .single();
+    if (error) throw new Error(`Kunne ikke opprette turnering: ${error.message}`);
+    return mapTournament(data as TournamentRow);
+  },
+
+  async updateTournament(id, patch) {
+    const supabase = getSupabaseAdmin();
+    // Satt sammen med spredning (samme mønster som updateAdminUser over) –
+    // samme årsak som typecheck-feilen opponent_name ga i turneringsrunden.
+    const { data, error } = await supabase
+      .from("tournaments")
+      .update({
+        ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.code !== undefined ? { code: patch.code } : {}),
+        ...(patch.active !== undefined ? { active: patch.active } : {}),
+        ...(patch.expiresAt !== undefined ? { expires_at: patch.expiresAt } : {}),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw new Error(`Kunne ikke oppdatere turnering: ${error.message}`);
+    return mapTournament(data as TournamentRow);
+  },
+
+  async deleteTournament(id) {
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("tournaments").delete().eq("id", id);
+    if (error) throw new Error(`Kunne ikke slette turnering: ${error.message}`);
   },
 
   async getSetting(key) {

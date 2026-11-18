@@ -60,6 +60,7 @@ export async function GET() {
       totalAmountOre: g.totalAmountOre,
       note: g.note,
       opponentName: g.opponentName,
+      tournamentId: g.tournamentId,
       createdAt: g.createdAt,
       slots: g.slots
         .map((s) => ({ startTime: s.startTime, endTime: s.endTime }))
